@@ -26,9 +26,6 @@ public final class TimeRepository: NSObject, Times {
   
   public static let shared = TimeRepository()
 
-  // Due to NSUbiquitousKeyValueStore‘s limitations, this can only be a
-  // temporary solution. What happens if we violate the quota?
-  
   private lazy var store = NSUbiquitousKeyValueStore.default()
   
   public func time(uid: String) -> CMTime? {

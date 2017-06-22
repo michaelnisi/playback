@@ -36,12 +36,33 @@ public protocol PlayerHost {
   var player: AVPlayer? { get set }
 }
 
+// MARK: - PlaybackState
+
 public enum PlaybackState {
   case paused
   case preparing(Entry)
   case playing(Entry)
   case viewing(AVPlayer)
 }
+
+extension PlaybackState: Equatable {
+  public static func ==(lhs: PlaybackState, rhs: PlaybackState) -> Bool {
+    switch (lhs, rhs) {
+    case (.paused, .paused):
+      return true
+    case (.playing(let a), .playing(let b)):
+      return a == b
+    case (.preparing(let a), .preparing(let b)):
+      return a == b
+    case (.viewing(let a), .viewing(let b)):
+      return a == b
+    case (.paused, _), (.playing, _), (.preparing, _), (.viewing, _):
+      return false
+    }
+  }
+}
+
+// MARK: -
 
 public protocol PlaybackDelegate {
   func playback(session: Playback, didChange state: PlaybackState)
@@ -59,7 +80,7 @@ private enum PlaybackEvent {
   case video
 }
 
-/// Convenience access to probe the player‘s state, summarizing properties.
+/// Convenience access to probe the AVPlayer‘s state, summarizing properties.
 struct PlayerState {
   
   let host: PlayerHost
@@ -120,6 +141,7 @@ fileprivate let log = OSLog(subsystem: "ink.codes.playback", category: "play")
 
 // MARK: - PlaybackSession
 
+/// A `PlaybackSession` plays one audio or video file at a time.
 public class PlaybackSession: NSObject, PlayerHost, Playback {
   
   public static var shared = PlaybackSession()
@@ -138,12 +160,16 @@ public class PlaybackSession: NSObject, PlayerHost, Playback {
     }
   }
   
-  // This time property somehow bothers me. Why rely on state for this?
-  fileprivate var time: CMTime?
-  
-  public var player: AVPlayer?
+  /// The suggested time to start playing from.
+  fileprivate var suggestedTime: CMTime?
   
   var playerState: PlayerState!
+  
+  public var player: AVPlayer? {
+    didSet {
+      playerState = PlayerState(host: self)
+    }
+  }
   
   private var currentURL: URL? {
     get {
@@ -177,17 +203,15 @@ public class PlaybackSession: NSObject, PlayerHost, Playback {
   private func startTime() -> CMTime? {
     guard
       let seekableTimeRanges = player?.currentItem?.seekableTimeRanges,
-      let t = self.time else {
+      let t = self.suggestedTime else {
         return nil
     }
     return seekableTime(t, within: seekableTimeRanges)
   }
   
-  // TODO: Pass time to seekAndPlay instead of relying on state
-  
   private func seekAndPlay() {
     defer {
-      self.time = nil
+      self.suggestedTime = nil
     }
     
     guard let player = self.player, let entry = self.entry else {
@@ -382,8 +406,6 @@ public class PlaybackSession: NSObject, PlayerHost, Playback {
     let p = AVPlayer(playerItem: item)
     p.actionAtItemEnd = .pause
     
-    playerState = PlayerState(host: self) // TODO: Why exactly?
-    
     return p
   }
   
@@ -397,7 +419,7 @@ public class PlaybackSession: NSObject, PlayerHost, Playback {
   /// - Returns: The new playback state.
   private func resume(_ entry: Entry, at time: CMTime) -> PlaybackState {
     self.entry = entry
-    self.time = time
+    self.suggestedTime = time
     
     guard let urlString = entry.enclosure?.url,
       let url = URL(string: urlString) else {
@@ -432,6 +454,9 @@ public class PlaybackSession: NSObject, PlayerHost, Playback {
   
   var state = PlaybackState.paused {
     didSet {
+      guard state != oldValue else {
+        return
+      }
       delegate?.playback(session: self, didChange: state)
     }
   }
@@ -581,9 +606,6 @@ public class PlaybackSession: NSObject, PlayerHost, Playback {
         TimeRepository.shared.removeTime(for: tid)
         
         removeObservers(item: player.currentItem!)
-        self.player = nil
-        
-        time = nil
         
         state = .paused
         
@@ -648,10 +670,6 @@ extension PlaybackSession: Intermediating {
   
   public func activate() throws {
     let audio = AVAudioSession.sharedInstance()
-    
-    guard audio.category != AVAudioSessionCategoryPlayback else {
-      return
-    }
     
     try audio.setCategory(AVAudioSessionCategoryPlayback)
     try audio.setActive(true)
