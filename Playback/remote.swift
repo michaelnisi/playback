@@ -34,7 +34,7 @@ extension PlaybackSession: RemoteCommanding {
   }
   
   func onToggle(event: MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus {
-    return status(playerState.isPlaying ? pause() : play())
+    return status(state == .paused ? play() : pause())
   }
   
   // TODO: Add more remote commands
