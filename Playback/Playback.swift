@@ -47,7 +47,7 @@ extension PlaybackError: CustomStringConvertible {
 public enum PlaybackState {
   case paused
   case preparing(Entry)
-  case listening(Entry) // TODO: Add player to PlaybackState.listening
+  case listening(Entry)
   case viewing(Entry, AVPlayer)
 }
 
@@ -76,6 +76,8 @@ extension PlaybackState: Equatable {
 public protocol PlaybackDelegate {
   func playback(session: Playback, didChange state: PlaybackState)
   func playback(session: Playback, error: PlaybackError)
+  func nextTrack() -> Bool
+  func previousTrack() -> Bool
 }
 
 // MARK: - Internal
@@ -105,8 +107,6 @@ public class PlaybackSession: NSObject, Playback {
   
   public var delegate: PlaybackDelegate?
   
-  // TODO: Replace entry and suggestedTime properties with PlaybackState
-  
   fileprivate var entry: Entry? {
     didSet {
       guard
@@ -119,9 +119,12 @@ public class PlaybackSession: NSObject, Playback {
     }
   }
   
-  /// The suggested time to start playing from.
+  /// The suggested time to start playback from.
   fileprivate var suggestedTime: CMTime?
   
+  // TODO: Try reusing the player
+  
+  /// The current player.
   fileprivate var player: AVPlayer?
   
   private var currentURL: URL? {
@@ -153,17 +156,20 @@ public class PlaybackSession: NSObject, Playback {
     return nil
   }
   
+  // TODO: Review start time selection
+  
   private func startTime() -> CMTime? {
     guard
       let seekableTimeRanges = player?.currentItem?.seekableTimeRanges,
       let t = self.suggestedTime else {
-        return nil
+      return nil
     }
   
     guard let st = seekableTime(t, within: seekableTimeRanges) else {
       let r = seekableTimeRanges.first as! CMTimeRange
       return r.start
     }
+    
     return st
   }
   
@@ -423,7 +429,7 @@ public class PlaybackSession: NSObject, Playback {
   ///
   /// - Parameters:
   ///   - entry: The entry whose enclosed audio media is played.
-  ///   - time: Seek to `time` before playback begins.
+  ///   - time: Seek to `time` before resuming playback.
   ///
   /// - Returns: The new playback state: `.viewing`, `.listening`, or `.preparing`.
   private func resume(_ entry: Entry, at time: CMTime) -> PlaybackState {
@@ -444,10 +450,10 @@ public class PlaybackSession: NSObject, Playback {
     return .preparing(entry)
   }
   
-  /// Returns a time slightly before the previous play time matching `uid` or
-  /// an invalid time if no time to resume from is available. The invalid time,
-  /// instead of nil, enables uniform handling down the line, as supposed seek
-  /// times have to be validated anyways.
+  /// Returns a time slightly, five seconds at the moment, before the previous 
+  /// play time matching `uid` or an invalid time if no time to resume from is 
+  /// available. The invalid time, instead of nil, enables uniform handling down
+  /// the line, as supposed seek times have to be validated anyways.
   ///
   /// - Parameter uid: The identifier for the item.
   ///
@@ -469,6 +475,8 @@ public class PlaybackSession: NSObject, Playback {
       delegate?.playback(session: self, didChange: state)
     }
   }
+  
+  // TODO: Review playback error handling
   
   fileprivate func event(_ e: PlaybackEvent) -> PlaybackState {
     
@@ -519,8 +527,8 @@ public class PlaybackSession: NSObject, Playback {
       
       switch e {
       case .error(let er):
-        // TODO: Handle error while preparing
-        fatalError(er.description)
+        delegate?.playback(session: self, error: er)
+        newState = .paused
         
       case .play(let entry):
         guard
@@ -544,10 +552,7 @@ public class PlaybackSession: NSObject, Playback {
       }
       
     case .listening(let entry), .viewing(let entry, _):
-      
-      // Would be nice to remove these object state dependencies, in the best
-      // case, making all these case handlers autark.
-      
+
       guard let player = self.player else {
         fatalError("player expected")
       }
@@ -558,8 +563,8 @@ public class PlaybackSession: NSObject, Playback {
       
       switch e {
       case .error(let er):
-        // TODO: Handle error while .listening or .viewing
-        fatalError(er.description)
+        delegate?.playback(session: self, error: er)
+        newState = state
         
       case .paused:
         NowPlaying.set(entry: entry, player: player)

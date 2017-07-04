@@ -37,14 +37,12 @@ extension PlaybackSession: RemoteCommanding {
     return status(state == .paused ? play() : pause())
   }
   
-  // TODO: Add more remote commands
-  
   func onPreviousTrack(event: MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus {
-    return .commandFailed
+    return status((delegate?.previousTrack())!)
   }
   
   func onNextTrack(event: MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus {
-    return .commandFailed
+    return status((delegate?.nextTrack())!)
   }
   
   func onSeek(event: MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus {
@@ -60,8 +58,10 @@ extension PlaybackSession: RemoteCommanding {
     rcc.playCommand.addTarget(handler: onPlay)
     rcc.togglePlayPauseCommand.addTarget(handler: onToggle)
     
-//    rcc.nextTrackCommand.addTarget(handler: onNextTrack)
-//    rcc.previousTrackCommand.addTarget(handler: onPreviousTrack)
+    // TODO: Add more remote commands
+    
+    rcc.nextTrackCommand.addTarget(handler: onNextTrack)
+    rcc.previousTrackCommand.addTarget(handler: onPreviousTrack)
     
 //    rcc.seekForwardCommand.addTarget(handler: onSeek)
 //    rcc.seekBackwardCommand.addTarget(handler: onSeek)
