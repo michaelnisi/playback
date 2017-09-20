@@ -16,6 +16,8 @@ import os.log
 @available(iOS 10.0, *)
 fileprivate let log = OSLog(subsystem: "ink.codes.playback", category: "times")
 
+// TODO: Batch synchronize
+
 protocol Times {
   func time(uid: String) -> CMTime?
   func set(_ time: CMTime, for uid: String)

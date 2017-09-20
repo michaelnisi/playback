@@ -71,7 +71,7 @@ extension PlaybackState: Equatable {
   }
 }
 
-// MARK: -
+// TODO: Require more detailed, see MPRemoteCommandHandlerStatus, return values
 
 public protocol PlaybackDelegate {
   func playback(session: Playback, didChange state: PlaybackState)
