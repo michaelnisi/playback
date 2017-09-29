@@ -52,8 +52,10 @@ public struct NowPlaying {
       // TODO: Fallback on earlier versions
     }
 
-    if #available(iOS 10.3, *) {
-      info[MPNowPlayingInfoPropertyAssetURL] = entry.enclosure!.url
+    if #available(iOS 10.3, *),
+      let enclosure = entry.enclosure,
+      let url = URL(string: enclosure.url) {
+      info[MPNowPlayingInfoPropertyAssetURL] = url
     }
     
     let rate = player.rate

@@ -222,7 +222,7 @@ public class PlaybackSession: NSObject, Playback {
     assert(!tracks.isEmpty, "tracks not loaded")
     
     let containsVideo = tracks.contains {
-      $0.assetTrack.mediaType == AVMediaTypeVideo
+      $0.assetTrack.mediaType == AVMediaType.video
     }
     return containsVideo && type.isVideo
   }
@@ -327,11 +327,11 @@ public class PlaybackSession: NSObject, Playback {
     }
   }
   
-  func onItemDidPlayToEndTime() {
+  @objc func onItemDidPlayToEndTime() {
     state = event(.end)
   }
   
-  func onItemNewErrorLogEntry() {
+  @objc func onItemNewErrorLogEntry() {
     state = event(.error(.log))
   }
   

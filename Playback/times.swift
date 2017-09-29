@@ -28,7 +28,7 @@ public final class TimeRepository: NSObject, Times {
   
   public static let shared = TimeRepository()
 
-  private lazy var store = NSUbiquitousKeyValueStore.default()
+  private lazy var store = NSUbiquitousKeyValueStore.default
   
   public func time(uid: String) -> CMTime? {
     let k = key(from: uid)
