@@ -12,6 +12,8 @@ import FeedKit
 import Foundation
 import os.log
 
+// TODO: Review API and expose state
+
 // MARK: API
 
 public protocol Intermediating {
