@@ -579,7 +579,9 @@ public class PlaybackSession: NSObject, Playback {
             fatalError("no enclosure")
         }
         guard url != currentURL else {
-          fatalError("already playing")
+          print("** already playing")
+          newState = state
+          break
         }
         newState = resume(entry, at: time(for: url.absoluteString))
         
