@@ -11,12 +11,7 @@ import AVFoundation
 import FeedKit
 import os.log
 
-// MARK: - Logging
-
-@available(iOS 10.0, *)
 fileprivate let log = OSLog(subsystem: "ink.codes.playback", category: "times")
-
-// TODO: Batch synchronize
 
 protocol Times {
   func time(uid: String) -> CMTime?
@@ -30,8 +25,13 @@ public final class TimeRepository: NSObject, Times {
 
   private lazy var store = NSUbiquitousKeyValueStore.default
   
+  /// Produces a key for a unique identifier.
+  private static func key(from uid: String) -> String {
+    return String(djb2Hash32(string: uid))
+  }
+  
   public func time(uid: String) -> CMTime? {
-    let k = key(from: uid)
+    let k = TimeRepository.key(from: uid)
 
     guard
       let dict = store.dictionary(forKey: k),
@@ -40,38 +40,35 @@ public final class TimeRepository: NSObject, Times {
     else {
       return nil
     }
+    
     return CMTime(seconds: seconds, preferredTimescale: timescale)
   }
-  
-  private func key(from uid: String) -> String {
-    return String(djb2Hash(string: uid))
-  }
-  
-  private func timestamp() -> Double {
+
+  private static func timestamp() -> Double {
     return Date().timeIntervalSince1970
   }
   
   public func set(_ time: CMTime, for uid: String) {
     let seconds = time.seconds as NSNumber
     let timescale = time.timescale as NSNumber
-    let ts = timestamp() as NSNumber
+    let ts = TimeRepository.timestamp() as NSNumber
     
     var dict = [NSString : NSNumber]()
     dict["seconds"] = seconds
     dict["timescale"] = timescale
     dict["ts"] = ts
     
-    store.set(dict, forKey: key(from: uid))
+    store.set(dict, forKey: TimeRepository.key(from: uid))
     
     vacuum()
   }
   
   public func removeTime(for uid: String) {
-    store.removeObject(forKey: key(from: uid))
+    store.removeObject(forKey: TimeRepository.key(from: uid))
   }
 
   /// Removes oldest 256 objects from store to create space for new ones. 
-  /// Remember that the objects need to be timestamped, of course.
+  /// Remember that the objects, of course, need to be timestamped.
   public func vacuum() {
     let m = 512
     
@@ -103,25 +100,9 @@ public final class TimeRepository: NSObject, Times {
     }.suffix(from: m / 2)
     
     for object in objects {
-      print("** removing \(object)")
       store.removeObject(forKey: object.key)
     }
   }
 }
 
-private final class TimeCache: Times {
-  
-  private lazy var cache = NSCache<NSString, NSValue>()
-  
-  public func time(uid: String) -> CMTime? {
-    return cache.object(forKey: uid as NSString) as? CMTime
-  }
-  
-  public func set(_ time: CMTime, for uid: String) {
-    cache.setObject(NSValue(time: time), forKey: uid as NSString)
-  }
-  
-  public func removeTime(for uid: String) {
-    cache.removeObject(forKey: uid as NSString)
-  }
-}
+
