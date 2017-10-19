@@ -13,6 +13,7 @@ import Foundation
 import os.log
 
 // TODO: Review API and expose state
+// TODO: Add events
 
 // MARK: API
 
@@ -469,7 +470,7 @@ public class PlaybackSession: NSObject, Playback {
   
   // MARK: - FSM
   
-  var state = PlaybackState.paused {
+  public private(set) var state = PlaybackState.paused {
     didSet {
       guard state != oldValue else {
         return
