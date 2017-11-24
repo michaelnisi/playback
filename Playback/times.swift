@@ -23,6 +23,10 @@ public final class TimeRepository: NSObject, Times {
   
   public static let shared = TimeRepository()
   
+  /// The maximum number of keys in the store, before we begin to remove keys:
+  /// removing the older 256 keys.
+  static let threshold = 512
+  
   /// Produces a key for a unique identifier.
   private static func key(from uid: String) -> String {
     return String(djb2Hash32(string: uid))
@@ -74,11 +78,9 @@ public final class TimeRepository: NSObject, Times {
   /// Removes oldest 256 objects from store to create space for new ones. 
   /// Remember that the objects, of course, need to be timestamped.
   public func vacuum() {
-    let m = 512
-    
     let items = store.dictionaryRepresentation
     
-    guard items.count > m else {
+    guard items.count > TimeRepository.threshold else {
       return
     }
     
@@ -96,17 +98,17 @@ public final class TimeRepository: NSObject, Times {
     }
     
     // Checking the count again, because there might have been objects without
-    // timestamps.
+    // timestamps, which are none of our business.
     
-    guard timestampsByKeys.count > m else {
-      return
+    guard timestampsByKeys.count > TimeRepository.threshold else {
+      return os_log("not enough timestamps", log: log)
     }
     
     os_log("vacuum ubiquitous-kv-store", log: log, type: .debug)
 
     let objects = timestampsByKeys.sorted {
       $0.value > $1.value
-    }.suffix(from: m / 2)
+    }.suffix(from: TimeRepository.threshold / 2)
     
     for object in objects {
       store.removeObject(forKey: object.key)
