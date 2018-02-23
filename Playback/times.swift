@@ -101,7 +101,7 @@ public final class TimeRepository: NSObject, Times {
     // timestamps, which are none of our business.
     
     guard timestampsByKeys.count > TimeRepository.threshold else {
-      return os_log("not enough timestamps", log: log)
+      return os_log("sufficient key space", log: log, type: .debug)
     }
     
     os_log("vacuum ubiquitous-kv-store", log: log, type: .debug)

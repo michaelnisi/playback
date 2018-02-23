@@ -13,7 +13,10 @@ import Foundation
 import os.log
 
 // TODO: Review API and expose state
+// TODO: Think about integrationg fileproxy
+
 // TODO: Add events
+// TODO: Save current play time when the app
 
 // MARK: API
 
