@@ -30,6 +30,13 @@ public protocol Playing {
   @discardableResult func pause() -> Bool
 }
 
+public protocol Downloading {
+
+  /// Enqueues background downloads for enclosures of entries.
+  func enqueueDownloads(with entries: [Entry]) throws
+  
+}
+
 public protocol Playback: Intermediating, Playing, NSObjectProtocol {
   var delegate: PlaybackDelegate? { get set }
 }
@@ -111,6 +118,8 @@ public class PlaybackSession: NSObject, Playback {
   
   public static var shared = PlaybackSession()
   
+  private let proxy = FileProxy()
+  
   public var delegate: PlaybackDelegate?
   
   fileprivate var entry: Entry? {
@@ -118,7 +127,7 @@ public class PlaybackSession: NSObject, Playback {
       guard
         oldValue != entry,
         let player = self.player,
-        let tid = currentURL?.absoluteString else {
+        let tid = oldValue?.enclosure?.url else {
         return
       }
       TimeRepository.shared.set(player.currentTime(), for: tid)
@@ -132,6 +141,8 @@ public class PlaybackSession: NSObject, Playback {
   
   /// The current player.
   fileprivate var player: AVPlayer?
+  
+  // TODO: Asset URLs cannot identify items anymore
   
   private var currentURL: URL? {
     get {
@@ -447,11 +458,13 @@ public class PlaybackSession: NSObject, Playback {
       fatalError("URL required")
     }
     
-    guard currentURL != url else {
+    let proxiedURL = try! proxy.url(for: url)
+    
+    guard currentURL != proxiedURL else {
       return seekAndPlay()
     }
     
-    player = freshPlayer(with: url)
+    player = freshPlayer(with: proxiedURL)
     
     return .preparing(entry)
   }
@@ -563,7 +576,7 @@ public class PlaybackSession: NSObject, Playback {
         fatalError("player expected")
       }
       
-      guard let tid = currentURL?.absoluteString else {
+      guard let tid = entry.enclosure?.url else {
         fatalError("cannot identify time")
       }
       
@@ -655,6 +668,16 @@ extension PlaybackSession: Playing {
     }
     player?.pause()
     return true
+  }
+  
+}
+
+// MARK: - Donwloading
+
+extension PlaybackSession: Downloading {
+  
+  public func enqueueDownloads(with entries: [Entry]) throws {
+    os_log("enqueuing downloads: %{public}@", log: log, type: .debug, entries)
   }
   
 }
