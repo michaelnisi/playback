@@ -30,13 +30,6 @@ public protocol Playing {
   @discardableResult func pause() -> Bool
 }
 
-public protocol Downloading {
-
-  /// Enqueues background downloads for enclosures of entries.
-  func enqueueDownloads(with entries: [Entry]) throws
-  
-}
-
 public protocol Playback: Intermediating, Playing, NSObjectProtocol {
   var delegate: PlaybackDelegate? { get set }
 }
@@ -114,11 +107,13 @@ fileprivate let log = OSLog(subsystem: "ink.codes.playback", category: "play")
 // MARK: - PlaybackSession
 
 /// A `PlaybackSession` plays one audio or video file at a time.
-public class PlaybackSession: NSObject, Playback {
+public final class PlaybackSession: NSObject, Playback {
   
-  public static var shared = PlaybackSession()
+  private let proxy: FileProxying
   
-  private let proxy = FileProxy()
+  public init(proxy: FileProxying) {
+    self.proxy = proxy
+  }
   
   public var delegate: PlaybackDelegate?
   
@@ -142,8 +137,7 @@ public class PlaybackSession: NSObject, Playback {
   /// The current player.
   fileprivate var player: AVPlayer?
   
-  // TODO: Asset URLs cannot identify items anymore
-  
+  /// The URL of the currently playing asset.
   private var currentURL: URL? {
     get {
       guard let asset = player?.currentItem?.asset as? AVURLAsset else {
@@ -458,7 +452,13 @@ public class PlaybackSession: NSObject, Playback {
       fatalError("URL required")
     }
     
-    let proxiedURL = try! proxy.url(for: url)
+    let opts = DownloadTaskConfiguration(
+      countOfBytesClientExpectsToSend: nil,
+      countOfBytesClientExpectsToReceive: nil,
+      earliestBeginDate: Date().addingTimeInterval(60)
+    )
+    // To not overlap with streaming, we delay downloading.
+    let proxiedURL = try! proxy.url(for: url, with: opts)
     
     guard currentURL != proxiedURL else {
       return seekAndPlay()
@@ -668,16 +668,6 @@ extension PlaybackSession: Playing {
     }
     player?.pause()
     return true
-  }
-  
-}
-
-// MARK: - Donwloading
-
-extension PlaybackSession: Downloading {
-  
-  public func enqueueDownloads(with entries: [Entry]) throws {
-    os_log("enqueuing downloads: %{public}@", log: log, type: .debug, entries)
   }
   
 }
