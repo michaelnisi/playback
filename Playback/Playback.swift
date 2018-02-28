@@ -13,6 +13,9 @@ import Foundation
 import os.log
 
 // TODO: Review API and expose state
+// - Playback has no member state
+// - Playback has no member seekAndPlay
+
 // TODO: Think about integrationg fileproxy
 
 // TODO: Add events
