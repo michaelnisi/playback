@@ -51,8 +51,6 @@ public final class PlaybackSession: NSObject, Playback {
   /// The suggested time to start playback from.
   fileprivate var suggestedTime: CMTime?
   
-  // TODO: Try reusing the player
-  
   /// The current player.
   fileprivate var player: AVPlayer?
   
@@ -614,6 +612,7 @@ extension PlaybackSession: Intermediating {
     try audio.setCategory(AVAudioSessionCategoryPlayback)
     try audio.setActive(true)
     
+    // Find remote managing code in './remote.swift'.
     addRemoteCommandTargets()
   }
   
