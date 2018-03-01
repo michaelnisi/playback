@@ -27,20 +27,36 @@ public protocol Intermediating {
 
 // MARK: - Playing
 
+public enum ResumePosition {
+  case previous, beginning
+}
+
 /// Playing back audio-visual media of enclosures found in FeedKit entries.
 public protocol Playing {
   
-  /// Starts playing `entry` and updates now playing info.
-  @discardableResult func play(_ entry: Entry?) -> Bool
+  /// Resumes playing of given `entry`. Without an entry, it assumes you want to
+  /// resume playing the current episode, meaning the enclosure of the current
+  /// entry. In this case, if no current entry exists, it is a NOP and returns
+  /// `false`. The episode will be resumed from its previous play position if
+  /// possible.
+  ///
+  /// - Parameter entry: The `entry` to play or `nil`.
+  ///
+  /// - Returns: `true` if it worked.
+  @discardableResult func resume(
+    entry: Entry?, from position: ResumePosition) -> Bool
+  
+  /// Resumes `entry` from previous position.
+  @discardableResult func resume(entry: Entry) -> Bool
+  
+  /// Resumes current item from previous playing position.
+  @discardableResult func resume() -> Bool
   
   /// Pauses the currently playing item.
   @discardableResult func pause() -> Bool
   
   /// The currently playing entry.
   var currentEntry: Entry? { get }
-
-  /// Resumes playing the current item if we there is one.
-  func resume()
 }
 
 // MARK: - Playback

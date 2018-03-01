@@ -26,7 +26,7 @@ extension PlaybackSession: RemoteCommanding {
   }
   
   func onPlay(event: MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus {
-    return status(play())
+    return status(resume())
   }
   
   func onPause(event: MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus {
@@ -34,7 +34,7 @@ extension PlaybackSession: RemoteCommanding {
   }
   
   func onToggle(event: MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus {
-    return status(state == .paused ? play() : pause())
+    return status(state == .paused ? resume() : pause())
   }
   
   func onPreviousTrack(event: MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus {

@@ -558,7 +558,7 @@ public final class PlaybackSession: NSObject, Playback {
 // MARK: - Playing
 
 extension PlaybackSession: Playing {
-  
+
   public var currentEntry: Entry? {
     switch state {
     case .preparing(let current), .listening(let current):
@@ -568,25 +568,23 @@ extension PlaybackSession: Playing {
     }
   }
   
-  public func resume() {
-    let _ = seekAndPlay()
-  }
-  
-  /// Plays enclosue of given `entry`. Without an entry, it assumes you want to
-  /// resume playing the current episode, meaning the enclosure of the current
-  /// entry. In this case, if no current entry exists, it is a NOP and returns
-  /// `false`. The episode will be resumed from its previous play position if
-  /// possible.
-  ///
-  /// - Parameter entry: The `entry` to play or `nil`.
-  ///
-  /// - Returns: `true` if it worked.
-  @discardableResult public func play(_ entry: Entry? = nil) -> Bool {
+  @discardableResult public func resume(
+    entry: Entry? = nil,
+    from position: ResumePosition = .previous
+  ) -> Bool {
     guard let e = entry ?? self.entry else {
       return false
     }
     state = event(.play(e))
     return true
+  }
+  
+  @discardableResult public func resume(entry: Entry) -> Bool {
+    return resume(entry: entry)
+  }
+  
+  @discardableResult public func resume() -> Bool {
+    return resume(entry: nil)
   }
   
   /// Pauses the player.
