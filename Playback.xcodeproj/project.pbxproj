@@ -11,6 +11,7 @@
 		4C6FB90920452CA2005C559E /* FileLocator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C6FB90520452CA2005C559E /* FileLocator.swift */; };
 		4C6FB90A20452CA2005C559E /* FileProxying.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C6FB90620452CA2005C559E /* FileProxying.swift */; };
 		4C6FB90B20452CA2005C559E /* FileProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C6FB90720452CA2005C559E /* FileProxy.swift */; };
+		4C6FB91420481084005C559E /* PlaybackSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C6FB91320481084005C559E /* PlaybackSession.swift */; };
 		4E5C0ED41EF13CAC00B090EF /* Playback.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4E5C0ECA1EF13CAC00B090EF /* Playback.framework */; };
 		4E5C0ED91EF13CAC00B090EF /* PlaybackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E5C0ED81EF13CAC00B090EF /* PlaybackTests.swift */; };
 		4E5C0EDB1EF13CAC00B090EF /* Playback.h in Headers */ = {isa = PBXBuildFile; fileRef = 4E5C0ECD1EF13CAC00B090EF /* Playback.h */; settings = {ATTRIBUTES = (Public, ); }; };
@@ -36,6 +37,7 @@
 		4C6FB90520452CA2005C559E /* FileLocator.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = FileLocator.swift; path = ../../fileproxy/Sources/fileproxy/FileLocator.swift; sourceTree = "<group>"; };
 		4C6FB90620452CA2005C559E /* FileProxying.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = FileProxying.swift; path = ../../fileproxy/Sources/fileproxy/FileProxying.swift; sourceTree = "<group>"; };
 		4C6FB90720452CA2005C559E /* FileProxy.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = FileProxy.swift; path = ../../fileproxy/Sources/fileproxy/FileProxy.swift; sourceTree = "<group>"; };
+		4C6FB91320481084005C559E /* PlaybackSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackSession.swift; sourceTree = "<group>"; };
 		4E5C0ECA1EF13CAC00B090EF /* Playback.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Playback.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		4E5C0ECD1EF13CAC00B090EF /* Playback.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Playback.h; sourceTree = "<group>"; };
 		4E5C0ECE1EF13CAC00B090EF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -94,6 +96,7 @@
 				4E5C0ECD1EF13CAC00B090EF /* Playback.h */,
 				4E5C0ECE1EF13CAC00B090EF /* Info.plist */,
 				4E5C0EE41EF1672C00B090EF /* Playback.swift */,
+				4C6FB91320481084005C559E /* PlaybackSession.swift */,
 				4E5C0F001EF2887F00B090EF /* remote.swift */,
 				4E5C0F021EF2C3FA00B090EF /* times.swift */,
 				4E5C0F041EF2C5BE00B090EF /* now.swift */,
@@ -238,6 +241,7 @@
 				4C6FB90A20452CA2005C559E /* FileProxying.swift in Sources */,
 				4E5C0F031EF2C3FA00B090EF /* times.swift in Sources */,
 				4C6FB90B20452CA2005C559E /* FileProxy.swift in Sources */,
+				4C6FB91420481084005C559E /* PlaybackSession.swift in Sources */,
 				4C6FB90820452CA2005C559E /* FileProxyDelegate.swift in Sources */,
 				4C6FB90920452CA2005C559E /* FileLocator.swift in Sources */,
 				4E5C0F011EF2887F00B090EF /* remote.swift in Sources */,
