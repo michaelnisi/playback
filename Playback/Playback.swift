@@ -12,15 +12,6 @@ import FeedKit
 import Foundation
 import os.log
 
-// TODO: Review API and expose state
-// - Playback has no member state
-// - Playback has no member seekAndPlay
-
-// TODO: Think about integrationg fileproxy
-
-// TODO: Add events
-// TODO: Save current play time when the app
-
 // MARK: API
 
 public protocol Intermediating {
@@ -31,8 +22,13 @@ public protocol Intermediating {
 public protocol Playing {
   @discardableResult func play(_ entry: Entry?) -> Bool
   @discardableResult func pause() -> Bool
+  
+  var currentEntry: Entry? { get }
+
+  func resume()
 }
 
+/// The main conglomerate API of this module.
 public protocol Playback: Intermediating, Playing, NSObjectProtocol {
   var delegate: PlaybackDelegate? { get set }
 }
@@ -644,6 +640,19 @@ public final class PlaybackSession: NSObject, Playback {
 // MARK: - Playing
 
 extension PlaybackSession: Playing {
+  
+  public var currentEntry: Entry? {
+    switch state {
+    case .preparing(let current), .listening(let current):
+      return current
+    default:
+      return nil
+    }
+  }
+  
+  public func resume() {
+    let _ = seekAndPlay()
+  }
   
   /// Plays enclosue of given `entry`. Without an entry, it assumes you want to 
   /// resume playing the current episode, meaning the enclosure of the current 
