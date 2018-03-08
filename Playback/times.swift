@@ -8,15 +8,21 @@
 
 import Foundation
 import AVFoundation
-import FeedKit
 import os.log
 
-fileprivate let log = OSLog(subsystem: "ink.codes.playback", category: "times")
-
-protocol Times {
-  func time(uid: String) -> CMTime?
-  func set(_ time: CMTime, for uid: String)
-  func removeTime(for uid: String)
+/// Returns 32-bit hash of `string`.
+///
+/// - [djb2](http://www.cse.yorku.ca/~oz/hash.html)
+/// - [Use Your Loaf](https://useyourloaf.com/blog/swift-hashable/)
+///
+/// - Parameter string: The string to hash.
+///
+/// - Returns: A 32-bit signed Integer.
+private func djb2Hash32(string: String) -> Int32 {
+  let unicodeScalars = string.unicodeScalars.map { $0.value }
+  return Int32(unicodeScalars.reduce(5381) {
+    ($0 << 5) &+ $0 &+ Int32($1)
+  })
 }
 
 public final class TimeRepository: NSObject, Times {
@@ -66,12 +72,13 @@ public final class TimeRepository: NSObject, Times {
     let k = TimeRepository.key(from: uid)
     store.set(dict, forKey: k)
     
-    os_log("set seconds: { %@: %@ }", log: log, type: .debug, k, seconds)
+    os_log("set seconds: { %@: %@ }", log: log, type: .debug, uid, seconds)
     
     vacuum()
   }
   
   public func removeTime(for uid: String) {
+    os_log("removing time: %@", log: log, type: .debug, uid)
     store.removeObject(forKey: TimeRepository.key(from: uid))
   }
 

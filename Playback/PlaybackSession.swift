@@ -12,50 +12,46 @@ import FeedKit
 import Foundation
 import os.log
 
-private enum PlaybackEvent {
-  case end
-  case error(PlaybackError)
-  case paused
-  case play(Entry)
-  case playing
-  case ready
-  case video
+let log = OSLog(subsystem: "ink.codes.playback", category: "session")
+
+/// Persists play times.
+public protocol Times {
+  func time(uid: String) -> CMTime?
+  func set(_ time: CMTime, for uid: String)
+  func removeTime(for uid: String)
 }
 
-/// A `PlaybackSession` plays one audio or video file at a time.
+struct RemoteCommandTargets {
+  let pause: Any?
+  let play: Any?
+  let togglePlayPause: Any?
+  let nextTrack: Any?
+  let previousTrack: Any?
+}
+
+/// Implements `Playback` as
+/// [Finite-state machine](https://en.wikipedia.org/wiki/Finite-state_machine).
 public final class PlaybackSession: NSObject, Playback {
   
-  @available(iOS 10.0, *)
-  static let log = OSLog(subsystem: "ink.codes.playback", category: "play")
+  private let times: Times
   
-  private let proxy: FileProxying
-  
-  public init(proxy: FileProxying) {
-    self.proxy = proxy
+  public init(times: Times) {
+    self.times = times
+    super.init()
+    try! activate()
   }
   
   public var delegate: PlaybackDelegate?
   
-  fileprivate var entry: Entry? {
-    didSet {
-      guard
-        oldValue != entry,
-        let player = self.player,
-        let tid = oldValue?.enclosure?.url else {
-          return
-      }
-      TimeRepository.shared.set(player.currentTime(), for: tid)
-    }
-  }
+  // MARK: Internals
   
-  /// The suggested time to start playback from.
-  fileprivate var suggestedTime: CMTime?
+  var remoteCommandTargets: RemoteCommandTargets?
   
   /// The current player.
-  fileprivate var player: AVPlayer?
+  private var player: AVPlayer?
   
   /// The URL of the currently playing asset.
-  private var currentURL: URL? {
+  private var assetURL: URL? {
     get {
       guard let asset = player?.currentItem?.asset as? AVURLAsset else {
         return nil
@@ -84,14 +80,27 @@ public final class PlaybackSession: NSObject, Playback {
     return nil
   }
   
-  // TODO: Review start time selection
-  
-  private func startTime() -> CMTime? {
-    guard
-      let seekableTimeRanges = player?.currentItem?.seekableTimeRanges,
-      let t = self.suggestedTime else {
-        return nil
+  /// Returns a time slightly, five seconds at the moment, before the previous
+  /// play time matching `uid` or an invalid time if no time to resume from is
+  /// available. The invalid time, instead of nil, enables uniform handling down
+  /// the line, as supposed seek times have to be validated anyways.
+  ///
+  /// - Parameter uid: The identifier for the item.
+  ///
+  /// - Returns: A time to resume from or an invalid time.
+  private func time(for uid: String) -> CMTime {
+    if let t = times.time(uid: uid) {
+      return CMTimeSubtract(t, CMTime(seconds: 5, preferredTimescale: t.timescale))
     }
+    return CMTime()
+  }
+  
+  private func startTime(item: AVPlayerItem?, url: String) -> CMTime? {
+    guard let seekableTimeRanges = item?.seekableTimeRanges else {
+      return nil
+    }
+    
+    let t = time(for: url)
     
     guard let st = seekableTime(t, within: seekableTimeRanges) else {
       let r = seekableTimeRanges.first as! CMTimeRange
@@ -102,43 +111,45 @@ public final class PlaybackSession: NSObject, Playback {
   }
   
   /// Resumes playback of the current item.
-  public func seekAndPlay() -> PlaybackState {
-    defer {
-      self.suggestedTime = nil
-    }
-    
+  public func seek(playing: Bool) -> PlaybackState {
     guard
       let player = self.player,
-      let entry = self.entry,
+      let entry = self.currentEntry,
       let enclosure = entry.enclosure,
       let tracks = player.currentItem?.tracks else {
-        fatalError("requirements to seek and play not met")
+      fatalError("requirements to seek and play not met")
     }
-    
-    guard player.rate != 1 else {
+
+    guard player.rate != 1, !tracks.isEmpty else {
       return state
     }
     
-    let newState: PlaybackState = isVideo(tracks: tracks, type: enclosure.type)
-      ? .viewing(entry, player)
-      : .listening(entry)
+    let newState: PlaybackState = {
+      guard playing else {
+        return .paused(entry)
+      }
+      return isVideo(tracks: tracks, type: enclosure.type)
+        ? .viewing(entry, player)
+        : .listening(entry)
+    }()
     
-    guard let time = startTime() else {
-      player.play()
-      NowPlaying.set(entry: entry, player: player)
+    guard let time = startTime(item: player.currentItem, url: enclosure.url) else {
+      if playing {
+        player.play()
+      }
       return newState
     }
     
     player.currentItem?.cancelPendingSeeks()
     
-    player.seek(to: time) { [weak self] ok in
-      assert(ok, "seek failed")
-      
+    player.seek(to: time) { [weak self] finished in
+      guard finished else {
+        return
+      }
       DispatchQueue.main.async { [weak self] in
-        guard let entry = self?.entry, let player = self?.player else {
-          return
+        if playing || self?.shouldPlay ?? false {
+          player.play()
         }
-        player.play()
         NowPlaying.set(entry: entry, player: player)
       }
     }
@@ -147,8 +158,6 @@ public final class PlaybackSession: NSObject, Playback {
   }
   
   private func isVideo(tracks: [AVPlayerItemTrack], type: EnclosureType) -> Bool {
-    assert(!tracks.isEmpty, "tracks not loaded")
-    
     let containsVideo = tracks.contains {
       $0.assetTrack.mediaType == AVMediaType.video
     }
@@ -162,7 +171,7 @@ public final class PlaybackSession: NSObject, Playback {
       fatalError("no tracks to play")
     }
     
-    guard let enclosure = entry?.enclosure,
+    guard let enclosure = currentEntry?.enclosure,
       isVideo(tracks: tracks, type: enclosure.type) else {
         return
     }
@@ -199,17 +208,14 @@ public final class PlaybackSession: NSObject, Playback {
   // guard.
   
   private func onDurationChange(_ change: [NSKeyValueChangeKey : Any]?) {
+    os_log("duration change", log: log, type: .debug)
+    
     guard change?[.newKey] as? CMTime != change?[.oldKey] as? CMTime else {
-      if #available(iOS 10.0, *) {
-        os_log(
-          "observed redundant duration change",
-          log: PlaybackSession.log,
-          type: .error
-        )
-      }
+      os_log("observed redundant duration change", log: log)
       return
     }
-    NowPlaying.set(entry: entry!, player: player!)
+    
+    NowPlaying.set(entry: currentEntry!, player: player!)
   }
   
   private func onTimeControlChange(_ change: [NSKeyValueChangeKey : Any]?) {
@@ -322,9 +328,11 @@ public final class PlaybackSession: NSObject, Playback {
   private var playerContext = 0
   
   /// Passing `nil` as `url` dismisses the current player and returns `nil`.
-  @discardableResult private func freshPlayer(with url: URL? = nil) -> AVPlayer? {
+  @discardableResult
+  private func freshPlayer(with url: URL? = nil) -> AVPlayer? {
     if let prev = player?.currentItem {
       removeObservers(item: prev)
+      player?.replaceCurrentItem(with: nil)
     }
     
     guard let url = url else {
@@ -334,6 +342,8 @@ public final class PlaybackSession: NSObject, Playback {
     
     let asset = freshAsset(url: url)
     let item = freshItem(asset: asset)
+    
+    let start = Date()
     
     let newPlayer = AVPlayer(playerItem: item)
     newPlayer.actionAtItemEnd = .pause
@@ -349,36 +359,27 @@ public final class PlaybackSession: NSObject, Playback {
       oldPlayer.removeObserver(self, forKeyPath: keyPath, context: &playerContext)
     }
     
+    let took = start.timeIntervalSinceNow
+    os_log("** took %@ seconds to create a new player",
+           log: log, type: .debug, took.description)
+    
     return newPlayer
   }
   
-  /// Resume playback of `entry` at `time`. Passing an invalid time, however,
-  /// causes the item to start from the beginning.
-  ///
-  /// - Parameters:
-  ///   - entry: The entry whose enclosed audio media is played.
-  ///   - time: Seek to `time` before resuming playback.
-  ///
-  /// - Returns: The new playback state: `.viewing`, `.listening`, or `.preparing`.
-  private func resume(_ entry: Entry, at time: CMTime) -> PlaybackState {
-    self.entry = entry
-    self.suggestedTime = time
-    
-    guard let urlString = entry.enclosure?.url,
+  private func playback(_ entry: Entry) -> PlaybackState {
+    guard
+      let urlString = entry.enclosure?.url,
       let url = URL(string: urlString) else {
-        fatalError("URL required")
+      fatalError("you are drunk: URL required")
     }
     
-    let opts = DownloadTaskConfiguration(
-      countOfBytesClientExpectsToSend: nil,
-      countOfBytesClientExpectsToReceive: nil,
-      earliestBeginDate: Date().addingTimeInterval(60)
-    )
-    // To not overlap with streaming, we delay downloading.
-    let proxiedURL = try! proxy.url(for: url, with: opts)
+    guard let proxiedURL = delegate?.proxy(url: url) else {
+      os_log("aborting playback: not reachable: %@", log: log, url.absoluteString)
+      return event(.paused)
+    }
     
-    guard currentURL != proxiedURL else {
-      return seekAndPlay()
+    guard assetURL != proxiedURL else {
+      return seek(playing: true)
     }
     
     player = freshPlayer(with: proxiedURL)
@@ -386,171 +387,267 @@ public final class PlaybackSession: NSObject, Playback {
     return .preparing(entry)
   }
   
-  /// Returns a time slightly, five seconds at the moment, before the previous
-  /// play time matching `uid` or an invalid time if no time to resume from is
-  /// available. The invalid time, instead of nil, enables uniform handling down
-  /// the line, as supposed seek times have to be validated anyways.
-  ///
-  /// - Parameter uid: The identifier for the item.
-  ///
-  /// - Returns: A time to resume from or an invalid time.
-  private func time(for uid: String) -> CMTime {
-    if let t = TimeRepository.shared.time(uid: uid) {
-      return CMTimeSubtract(t, CMTime(seconds: 5, preferredTimescale: t.timescale))
+  private func pause(_ entry: Entry) -> PlaybackState {
+    guard
+      let urlString = entry.enclosure?.url,
+      let url = URL(string: urlString) else {
+      fatalError("you are drunk: URL required")
     }
-    return CMTime()
+    
+    guard let proxiedURL = delegate?.proxy(url: url) else {
+      os_log("aborting playback: not reachable: %@", log: log, url.absoluteString)
+      return event(.paused)
+    }
+    
+    guard assetURL != proxiedURL else {
+      return seek(playing: false)
+    }
+    
+    player = freshPlayer(with: proxiedURL)
+    
+    return .paused(entry)
   }
   
   // MARK: - FSM
   
-  public private(set) var state = PlaybackState.paused {
+  private func setCurrentTime() {
+    guard let player = self.player,
+      let url = currentEntry?.enclosure?.url else {
+      os_log("** could not set time", log: log, type: .debug)
+      return
+    }
+    
+    let t = player.currentTime()
+    let threshold = CMTime(seconds: 15, preferredTimescale: t.timescale)
+    
+    let leading = CMTimeCompare(t, threshold)
+    guard leading != -1 else {
+      times.removeTime(for: url)
+      return
+    }
+    
+    if let duration = player.currentItem?.duration,
+      duration != kCMTimeIndefinite {
+      let end = CMTimeSubtract(duration, threshold)
+      let trailing = CMTimeCompare(t, end)
+      guard trailing == -1 else {
+        times.removeTime(for: url)
+        return
+      }
+    }
+    
+    times.set(t, for: url)
+  }
+  
+  public private(set) var state: PlaybackState = .inactive(nil) {
     didSet {
+      os_log("new state: %{public}@, old state: %{public}@", log: log, type: .debug,
+              state.description, oldValue.description)
       guard state != oldValue else {
         return
       }
+      
+      switch state {
+      case .paused(let entry), .preparing(let entry):
+        NowPlaying.set(entry: entry, player: player)
+      case .inactive, .listening, .viewing:
+        break
+      }
+
       delegate?.playback(session: self, didChange: state)
     }
   }
   
-  // TODO: Review playback error handling
-  
-  fileprivate func event(_ e: PlaybackEvent) -> PlaybackState {
-    
-    let oldState = state
-    var newState: PlaybackState?
-    
-    // Always set newState, instead of returning the new state directly, from
-    // within the switch statement cases, to ensure consistent logging, which
-    // is a lifesaver while debugging this FSM.
-    
-    defer {
-      if #available(iOS 10.0, *) {
-        os_log("%{public}@, after: %{public}@, while %{public}@",
-               log: PlaybackSession.log, type: .debug,
-               String(describing: newState!),
-               String(describing: e),
-               String(describing: oldState))
-      }
-    }
-    
+  private var shouldPlay = false
+
+  /// Returns the new playback state, arrived at by handling event `e` according
+  /// to the current state.
+  private func event(_ e: PlaybackEvent) -> PlaybackState {
+    os_log("event: %@", log: log, type: .debug, e.description)
+
+    // MARK: occured while:
     switch state {
       
-    case .paused:
-      
+    case .inactive(let fault):
+       // MARK: inactive
+      guard fault == nil else {
+        os_log("unresolved error while inactive: %{public}@",
+               log: log, type: .error, fault! as CVarArg)
+        fatalError(String(describing: fault))
+      }
+
       switch e {
+      case .change(let entry):
+        guard let newEntry = entry else {
+          return deactivate()
+        }
+        return pause(newEntry)
+      
       case .play(let entry):
-        guard let enclosureURL = entry.enclosure?.url,
-          let url = URL(string: enclosureURL) else {
-            fatalError("unexpected internal state")
+        guard entry == currentEntry else {
+          return state
+        }
+        return playback(currentEntry!)
+
+      case .end, .error, .paused, .playing, .ready, .video:
+        os_log("""
+          unhandled: {
+            event: %{public}@
+            while: %{public}@
+          }
+          """, log: log, type: .error, e.description, state.description)
+        fatalError(String(describing: e))
+      }
+      
+    case .paused:
+      // MARK: paused
+      switch e {
+      case .change(let entry):
+        guard let newEntry = entry else {
+          return deactivate()
+        }
+        return pause(newEntry)
+        
+      case .play(let entry):
+        guard entry == currentEntry else {
+          return state
+        }
+        guard let player = self.player else {
+          fatalError("impossible")
+        }
+        switch player.status {
+        case .unknown:
+          shouldPlay = true
+          return state
+        case .readyToPlay:
+          return playback(currentEntry!)
+        case .failed:
+          fatalError("failed")
+        }
+
+      case .playing: // TODO: Add entry
+        shouldPlay = false
+        guard let entry = currentEntry,
+          let player = self.player,
+          let tracks = player.currentItem?.tracks,
+          let type = entry.enclosure?.type else {
+          fatalError("impossible")
+        }
+        if isVideo(tracks: tracks, type: type) {
+          return .viewing(entry, player)
+        } else {
+          return .listening(entry)
         }
         
-        newState = resume(entry, at: time(for: url.absoluteString))
+      case .ready:
+        return seek(playing: false)
         
-      case .playing:
+      case .paused, .video:
+        return state
         
-        // Assuming only the video player can trigger this.
-        
-        newState = .viewing(entry!, player!)
-        
-      case .ready, .paused:
-        newState = state
-        
-      default:
-        break
+      case .end, .error:
+        os_log("""
+          unhandled: {
+            event: %{public}@
+            while: %{public}@
+          }
+          """, log: log, type: .error, e.description, state.description)
+        fatalError(String(describing: e))
       }
       
     case .preparing(let entry):
-      
+      // MARK: preparing
       switch e {
       case .error(let er):
         delegate?.playback(session: self, error: er)
-        newState = .paused
+        return .paused(entry)
         
       case .play(let entry):
-        guard
-          let enclosureURL = entry.enclosure?.url,
-          let url = URL(string: enclosureURL) else {
-            fatalError("no enclosure")
+        guard entry == currentEntry else {
+          return state
         }
-        newState = resume(entry, at: time(for: url.absoluteString))
+        return playback(currentEntry!)
         
       case .paused:
-        newState = .paused
+        return .paused(entry)
         
       case .ready:
-        newState = seekAndPlay()
+        return seek(playing: true)
         
       case .video:
-        newState = .viewing(entry, player!)
+        return .viewing(entry, player!)
         
-      default:
-        break
+      case .change, .end, .playing:
+        os_log("""
+          unhandled: {
+            event: %{public}@
+            while: %{public}@
+          }
+          """, log: log, type: .error, e.description, state.description)
+        fatalError(String(describing: e))
       }
       
     case .listening(let entry), .viewing(let entry, _):
-      
-      guard let player = self.player else {
-        fatalError("player expected")
-      }
-      
-      guard let tid = entry.enclosure?.url else {
-        fatalError("cannot identify time")
-      }
-      
+      // MARK: listening or viewing
       switch e {
       case .error(let er):
         delegate?.playback(session: self, error: er)
-        newState = state
+        return state
         
-      case .paused:
-        NowPlaying.set(entry: entry, player: player)
-        TimeRepository.shared.set(player.currentTime(), for: tid)
-        newState = .paused
+      case .paused, .end:
+        setCurrentTime()
+        return .paused(entry)
         
-      case .play(let entry):
-        guard let enclosureURL = entry.enclosure?.url,
-          let url = URL(string: enclosureURL) else {
-            fatalError("no enclosure")
+      case .change(let newEntry):
+        setCurrentTime()
+        guard let actualEntry = newEntry else {
+          return deactivate()
         }
-        guard url != currentURL else {
-          print("** already playing")
-          newState = state
-          break
-        }
-        newState = resume(entry, at: time(for: url.absoluteString))
+        return playback(actualEntry)
         
-      case .end:
-        
-        // Not releasing the item just yet, but keeping it around, user might
-        // decide to replay.
-        
-        NowPlaying.set(entry: entry, player: player)
-        TimeRepository.shared.removeTime(for: tid)
-        newState = .paused
-        
-      case .ready, .playing:
-        newState = state
-        
-      default:
-        break
+      case .ready, .playing, .play:
+        return state
+
+      case .video:
+        os_log("""
+          unhandled: {
+            event: %{public}@
+            while: %{public}@
+          }
+          """, log: log, type: .error, e.description, state.description)
+        fatalError(String(describing: e))
       }
       
     }
-    
-    if let s = newState {
-      return s
+
+  }
+  
+}
+
+// MARK: - Managing Audio Session and Remote Command Center
+
+extension PlaybackSession {
+  
+  private func activate() throws {
+    os_log("activate", log: log)
+    let session = AVAudioSession.sharedInstance()
+    try session.setCategory(AVAudioSessionCategoryPlayback)
+    try session.setActive(true)
+    addRemoteCommandTargets()
+  }
+  
+  private func deactivate() -> PlaybackState {
+    os_log("deactivate", log: log)
+    do {
+      try AVAudioSession.sharedInstance().setActive(false)
+    } catch {
+      return .inactive(error)
     }
-    
-    // Obviously, if we reach this, we didn‘t handle the event and thus crash.
-    
-    if #available(iOS 10.0, *) {
-      os_log("unhandled event: %{public}@ for state: %{public}@",
-             log: PlaybackSession.log, type: .error,
-             String(describing: e),
-             String(describing: oldState))
-    }
-    
-    fatalError()
+    return .inactive(nil)
+  }
+  
+  public func reclaim() {
+    addRemoteCommandTargets()
   }
   
 }
@@ -558,40 +655,46 @@ public final class PlaybackSession: NSObject, Playback {
 // MARK: - Playing
 
 extension PlaybackSession: Playing {
-
+  
   public var currentEntry: Entry? {
-    switch state {
-    case .preparing(let current), .listening(let current):
-      return current
-    default:
-      return nil
+    get {
+      switch state {
+      case .preparing(let entry),
+           .listening(let entry),
+           .viewing(let entry, _),
+           .paused(let entry):
+        return entry
+      case .inactive:
+        return nil
+      }
     }
+    
+    set {
+      guard newValue != currentEntry else {
+        return
+      }
+      
+      if let entry = newValue {
+        assert(entry.enclosure != nil, "URL required")
+      }
+      
+      state = event(.change(newValue))
+    }
+    
   }
   
-  @discardableResult public func resume(
-    entry: Entry? = nil,
-    from position: ResumePosition = .previous
-  ) -> Bool {
-    guard let e = entry ?? self.entry else {
+  @discardableResult
+  public func resume() -> Bool {
+    guard let entry = currentEntry else {
       return false
     }
-    state = event(.play(e))
+    state = event(.play(entry))
     return true
   }
   
-  @discardableResult public func resume(entry: Entry) -> Bool {
-    return resume(entry: entry)
-  }
-  
-  @discardableResult public func resume() -> Bool {
-    return resume(entry: nil)
-  }
-  
-  /// Pauses the player.
-  ///
-  /// - Returns: `true` if it made sense.
-  @discardableResult public func pause() -> Bool {
-    guard entry != nil else {
+  @discardableResult
+  public func pause() -> Bool {
+    guard currentEntry != nil else {
       return false
     }
     player?.pause()
@@ -600,24 +703,3 @@ extension PlaybackSession: Playing {
   
 }
 
-// MARK: - Intermediating
-
-extension PlaybackSession: Intermediating {
-  
-  public func activate() throws {
-    let audio = AVAudioSession.sharedInstance()
-    
-    try audio.setCategory(AVAudioSessionCategoryPlayback)
-    try audio.setActive(true)
-    
-    // Find remote managing code in './remote.swift'.
-    addRemoteCommandTargets()
-  }
-  
-  public func deactivate() throws {
-    try AVAudioSession.sharedInstance().setActive(false)
-    
-    removeRemoteCommandTargets()
-  }
-  
-}

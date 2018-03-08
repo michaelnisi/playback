@@ -8,6 +8,7 @@
 
 import Foundation
 import MediaPlayer
+import os.log
 
 protocol RemoteCommanding {
   func addRemoteCommandTargets()
@@ -34,15 +35,27 @@ extension PlaybackSession: RemoteCommanding {
   }
   
   func onToggle(event: MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus {
-    return status(state == .paused ? resume() : pause())
+    if case .paused = state {
+      return status(resume())
+    } else {
+      return status(pause())
+    }
   }
   
   func onPreviousTrack(event: MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus {
-    return status((delegate?.previousTrack())!)
+    guard let item = delegate?.previousItem() else {
+      return status(false)
+    }
+    currentEntry = item
+    return status(true)
   }
   
   func onNextTrack(event: MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus {
-    return status((delegate?.nextTrack())!)
+    guard let item = delegate?.nextItem() else {
+      return status(false)
+    }
+    currentEntry = item
+    return status(true)
   }
   
   func onSeek(event: MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus {
@@ -52,32 +65,33 @@ extension PlaybackSession: RemoteCommanding {
   // MARK: - MPRemoteCommandCenter
   
   func addRemoteCommandTargets() {
+    removeRemoteCommandTargets()
+    
     let rcc = MPRemoteCommandCenter.shared()
-
-    rcc.pauseCommand.addTarget(handler: onPause)
-    rcc.playCommand.addTarget(handler: onPlay)
-    rcc.togglePlayPauseCommand.addTarget(handler: onToggle)
     
-    // TODO: Add more remote commands
+    os_log("adding remote commands", log: log)
     
-    rcc.nextTrackCommand.addTarget(handler: onNextTrack)
-    rcc.previousTrackCommand.addTarget(handler: onPreviousTrack)
-    
-//    rcc.seekForwardCommand.addTarget(handler: onSeek)
-//    rcc.seekBackwardCommand.addTarget(handler: onSeek)
+    self.remoteCommandTargets = RemoteCommandTargets(
+      pause: rcc.pauseCommand.addTarget(handler: onPause),
+      play: rcc.playCommand.addTarget(handler: onPlay),
+      togglePlayPause: rcc.togglePlayPauseCommand.addTarget(handler: onToggle),
+      nextTrack: rcc.nextTrackCommand.addTarget(handler: onNextTrack),
+      previousTrack: rcc.previousTrackCommand.addTarget(handler: onPreviousTrack)
+    )
   }
   
   func removeRemoteCommandTargets() {
+    guard let targets = remoteCommandTargets else {
+      return
+    }
+    
+    os_log("removing remote commands", log: log)
+    
     let rcc = MPRemoteCommandCenter.shared()
-    
-    rcc.pauseCommand.removeTarget(onPause)
-    rcc.playCommand.removeTarget(onPlay)
-    rcc.togglePlayPauseCommand.removeTarget(onToggle)
-    
-//    rcc.nextTrackCommand.removeTarget(onNextTrack)
-//    rcc.previousTrackCommand.removeTarget(onPreviousTrack)
-    
-//    rcc.seekForwardCommand.removeTarget(onSeek)
-//    rcc.seekBackwardCommand.removeTarget(onSeek)
+    rcc.pauseCommand.removeTarget(targets.pause)
+    rcc.playCommand.removeTarget(targets.play)
+    rcc.togglePlayPauseCommand.removeTarget(targets.togglePlayPause)
+    rcc.nextTrackCommand.removeTarget(targets.nextTrack)
+    rcc.previousTrackCommand.removeTarget(targets.previousTrack)
   }
 }
