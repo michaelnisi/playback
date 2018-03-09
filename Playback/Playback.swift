@@ -39,6 +39,9 @@ public protocol PlaybackDelegate {
   /// Returns the previous item.
   func previousItem() -> Entry?
   
+  /// Dismisses the video player.
+  func dismissVideo()
+  
 }
 
 /// Playing back audio-visual media enclosed by `FeedKit.Entry`, forwarding

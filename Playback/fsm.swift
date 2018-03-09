@@ -62,7 +62,7 @@ extension PlaybackState: CustomStringConvertible {
     case .paused(let entry):
       return "PlaybackState: paused: \(String(describing: entry))"
     case .preparing(let entry):
-      return "PlaybackState: paused: \(String(describing: entry))"
+      return "PlaybackState: preparing: \(String(describing: entry))"
     case .viewing(let entry, _):
       return "PlaybackState: viewing: \(String(describing: entry))"
     }

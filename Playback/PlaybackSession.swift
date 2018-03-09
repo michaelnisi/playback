@@ -329,10 +329,10 @@ public final class PlaybackSession: NSObject, Playback {
   
   /// Passing `nil` as `url` dismisses the current player and returns `nil`.
   @discardableResult
-  private func freshPlayer(with url: URL? = nil) -> AVPlayer? {
+  private func makeAVPlayer(url: URL? = nil) -> AVPlayer? {
     if let prev = player?.currentItem {
       removeObservers(item: prev)
-      player?.replaceCurrentItem(with: nil)
+      delegate?.dismissVideo()
     }
     
     guard let url = url else {
@@ -367,10 +367,15 @@ public final class PlaybackSession: NSObject, Playback {
   }
   
   private func playback(_ entry: Entry) -> PlaybackState {
-    guard
-      let urlString = entry.enclosure?.url,
-      let url = URL(string: urlString) else {
-      fatalError("you are drunk: URL required")
+    guard let urlString = entry.enclosure?.url,
+      let url = URL(string: urlString) else
+    {
+      // This should never have gotten this far, a valid URL should have been
+      // the starting point.
+      
+      // TODO: Begin with valid URL
+        
+      fatalError("unhandled error: invalid enclosure: \(entry)")
     }
     
     guard let proxiedURL = delegate?.proxy(url: url) else {
@@ -382,7 +387,7 @@ public final class PlaybackSession: NSObject, Playback {
       return seek(playing: true)
     }
     
-    player = freshPlayer(with: proxiedURL)
+    player = makeAVPlayer(url: proxiedURL)
     
     return .preparing(entry)
   }
@@ -391,7 +396,7 @@ public final class PlaybackSession: NSObject, Playback {
     guard
       let urlString = entry.enclosure?.url,
       let url = URL(string: urlString) else {
-      fatalError("you are drunk: URL required")
+      fatalError("unhandled error: invalid enclosure: \(entry)")
     }
     
     guard let proxiedURL = delegate?.proxy(url: url) else {
@@ -403,7 +408,7 @@ public final class PlaybackSession: NSObject, Playback {
       return seek(playing: false)
     }
     
-    player = freshPlayer(with: proxiedURL)
+    player = makeAVPlayer(url: proxiedURL)
     
     return .paused(entry)
   }
@@ -460,7 +465,7 @@ public final class PlaybackSession: NSObject, Playback {
   
   private var shouldPlay = false
 
-  /// Returns the new playback state, arrived at by handling event `e` according
+  /// Returns the new playback state after processing event `e` appropriately
   /// to the current state.
   private func event(_ e: PlaybackEvent) -> PlaybackState {
     os_log("event: %@", log: log, type: .debug, e.description)
@@ -543,6 +548,12 @@ public final class PlaybackSession: NSObject, Playback {
         return seek(playing: false)
         
       case .paused, .video:
+        os_log("""
+          ignoring: {
+            event: %{public}@
+            while: %{public}@
+          }
+          """, log: log, type: .debug, e.description, state.description)
         return state
         
       case .end, .error:
@@ -575,7 +586,13 @@ public final class PlaybackSession: NSObject, Playback {
         return seek(playing: true)
         
       case .video:
-        return .viewing(entry, player!)
+        os_log("""
+          ignoring: {
+            event: %{public}@
+            while: %{public}@
+          }
+          """, log: log, type: .debug, e.description, state.description)
+        return state
         
       case .change, .end, .playing:
         os_log("""
@@ -605,7 +622,20 @@ public final class PlaybackSession: NSObject, Playback {
         }
         return playback(actualEntry)
         
-      case .ready, .playing, .play:
+      case .play(let entry):
+        guard entry == currentEntry else {
+          return state
+        }
+        player?.play()
+        return state
+        
+      case .ready, .playing:
+        os_log("""
+          ignoring: {
+            event: %{public}@
+            while: %{public}@
+          }
+          """, log: log, type: .debug, e.description, state.description)
         return state
 
       case .video:
