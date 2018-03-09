@@ -14,11 +14,22 @@ import AVKit
 
 /// Enumerates states of the Playback FSM.
 public enum PlaybackState {
+  
+  /// The session is inactive.
   case inactive(Error?)
+  
+  /// The current item has been paused.
   case paused(Entry)
+  
+  /// Preparing a new item for playback.
   case preparing(Entry)
+  
+  /// Playing an audible item.
   case listening(Entry)
+  
+  /// Playing a visual item.
   case viewing(Entry, AVPlayer)
+  
 }
 
 extension PlaybackState: Equatable {

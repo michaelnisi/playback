@@ -585,6 +585,15 @@ public final class PlaybackSession: NSObject, Playback {
       case .ready:
         return seek(playing: true)
         
+      case .change(let entry):
+        guard let newEntry = entry else {
+          return deactivate()
+        }
+        guard newEntry == currentEntry else {
+          return state
+        }
+        return playback(currentEntry!)
+        
       case .video:
         os_log("""
           ignoring: {
@@ -594,7 +603,7 @@ public final class PlaybackSession: NSObject, Playback {
           """, log: log, type: .debug, e.description, state.description)
         return state
         
-      case .change, .end, .playing:
+      case .end, .playing:
         os_log("""
           unhandled: {
             event: %{public}@
