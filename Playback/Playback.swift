@@ -61,6 +61,17 @@ public protocol Playing {
   @discardableResult
   func pause() -> Bool
   
+  /// Sets current to the next item from the delegate.
+  @discardableResult
+  func forward() -> Bool
+  
+  /// Sets current to previous item from the delegate. If the player is playing,
+  /// playback must not have progressed over a certain threshold, or, instead
+  /// of asking the delegate for an item, the current item gets restarted and
+  /// its persistent play time reset.
+  @discardableResult
+  func backward() -> Bool
+  
 }
 
 /// The main conglomerate API of this module.

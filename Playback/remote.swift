@@ -43,19 +43,11 @@ extension PlaybackSession: RemoteCommanding {
   }
   
   func onPreviousTrack(event: MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus {
-    guard let item = delegate?.previousItem() else {
-      return status(false)
-    }
-    currentEntry = item
-    return status(true)
+    return status(backward())
   }
   
   func onNextTrack(event: MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus {
-    guard let item = delegate?.nextItem() else {
-      return status(false)
-    }
-    currentEntry = item
-    return status(true)
+    return status(forward())
   }
   
   func onSeek(event: MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus {

@@ -714,7 +714,38 @@ extension PlaybackSession {
 // MARK: - Playing
 
 extension PlaybackSession: Playing {
-
+  
+  public func forward() -> Bool {
+    guard let item = delegate?.nextItem() else {
+      return false
+    }
+    currentEntry = item
+    return true
+  }
+  
+  public func backward() -> Bool {
+    if
+      let url = currentEntry?.enclosure?.url,
+      player?.rate != 0,
+      let t = player?.currentTime() {
+      let threshold = CMTime(seconds: 5, preferredTimescale: t.timescale)
+      let leading = CMTimeCompare(t, threshold)
+      guard leading == -1 else {
+        player?.seek(to: CMTime(seconds: 0, preferredTimescale: t.timescale))
+        times.removeTime(for: url)
+        return true
+      }
+    }
+    
+    guard let item = delegate?.previousItem() else {
+      return false
+    }
+    
+    currentEntry = item
+    
+    return true
+  }
+  
   public var currentEntry: Entry? {
     get {
       switch state {
