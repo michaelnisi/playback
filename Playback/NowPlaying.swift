@@ -35,9 +35,7 @@ public struct NowPlaying {
     let boundsSize = CGSize(width: 600, height: 600)
     let artwork = MPMediaItemArtwork(boundsSize: boundsSize) { size in
       guard let img = ImageRepository.shared.image(for: entry, in: size) else {
-        
-        // TODO: Return correct image of correct size
-        return #imageLiteral(resourceName: "img100")
+        return #imageLiteral(resourceName: "Oval")
       }
       return img
     }

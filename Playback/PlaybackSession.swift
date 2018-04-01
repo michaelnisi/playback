@@ -185,8 +185,9 @@ public final class PlaybackSession: NSObject, Playback {
   private func onStatusChange(_ change: [NSKeyValueChangeKey : Any]?) {
     let status: AVPlayerItemStatus
 
-    if let statusNumber = change?[.newKey] as? NSNumber {
-      status = AVPlayerItemStatus(rawValue: statusNumber.intValue)!
+    if let newNumber = change?[.newKey] as? NSNumber,
+      let newStatus = AVPlayerItemStatus(rawValue: newNumber.intValue) {
+      status = newStatus
     } else {
       status = .unknown
     }
@@ -218,7 +219,13 @@ public final class PlaybackSession: NSObject, Playback {
       return
     }
 
-    NowPlaying.set(entry: currentEntry!, player: player!)
+    guard let e = currentEntry, let p = self.player else {
+      os_log("unexpected duration change: no entry or player", log: log,
+             type: .error)
+      return
+    }
+    
+    NowPlaying.set(entry: e, player: p)
   }
 
   private func onTimeControlChange(_ change: [NSKeyValueChangeKey : Any]?) {
@@ -724,18 +731,18 @@ extension PlaybackSession: Playing {
   }
   
   public func backward() -> Bool {
-    if
-      let url = currentEntry?.enclosure?.url,
-      player?.rate != 0,
-      let t = player?.currentTime() {
-      let threshold = CMTime(seconds: 5, preferredTimescale: t.timescale)
-      let leading = CMTimeCompare(t, threshold)
-      guard leading == -1 else {
-        player?.seek(to: CMTime(seconds: 0, preferredTimescale: t.timescale))
-        times.removeTime(for: url)
-        return true
-      }
-    }
+//    if
+//      let url = currentEntry?.enclosure?.url,
+//      player?.rate != 0,
+//      let t = player?.currentTime() {
+//      let threshold = CMTime(seconds: 5, preferredTimescale: t.timescale)
+//      let leading = CMTimeCompare(t, threshold)
+//      guard leading == -1 else {
+//        player?.seek(to: CMTime(seconds: 0, preferredTimescale: t.timescale))
+//        times.removeTime(for: url)
+//        return true
+//      }
+//    }
     
     guard let item = delegate?.previousItem() else {
       return false
