@@ -14,9 +14,30 @@ import FeedKit
 
 /// Enumerates playback errors.
 public enum PlaybackError: Error {
-  case unknown
+  case unknown(Error?)
   case failed
   case log
+}
+
+extension PlaybackError: Equatable {
+  public static func == (lhs: PlaybackError, rhs: PlaybackError) -> Bool {
+    switch (lhs, rhs) {
+    case (.unknown(let a), .unknown(let b)):
+      guard a == nil, b == nil else {
+        // Unfortunately, there’s no simple way to compare errors. So, even if
+        // the two had the same error, this would return false.
+        return false
+      }
+      return true
+    case (.failed, .failed):
+      return true
+    case (.log, .log):
+      return true
+    case (.unknown, _), (.failed, _), (.log, _):
+      return false
+    }
+  }
+  
 }
 
 /// A callback interface implemented by playback users to receive information
@@ -29,9 +50,6 @@ public protocol PlaybackDelegate {
   
   /// Called when this session’s playback `state` changed.
   func playback(session: Playback, didChange state: PlaybackState)
-  
-  /// Playback errors are forwarded to this callback.
-  func playback(session: Playback, error: PlaybackError)
   
   /// Returns the next item.
   func nextItem() -> Entry?

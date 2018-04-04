@@ -16,10 +16,10 @@ import AVKit
 public enum PlaybackState {
   
   /// The session is inactive.
-  case inactive(Error?)
+  case inactive(PlaybackError?)
   
   /// The current item has been paused.
-  case paused(Entry)
+  case paused(Entry, PlaybackError?)
   
   /// Preparing a new item for playback.
   case preparing(Entry)
@@ -37,14 +37,9 @@ extension PlaybackState: Equatable {
   public static func ==(lhs: PlaybackState, rhs: PlaybackState) -> Bool {
     switch (lhs, rhs) {
     case (.inactive(let a), .inactive(let b)):
-      guard a == nil, b == nil else {
-        // Unfortunately, there’s no simple way to compare errors. So, even if
-        // the two had the same error, this would return false.
-        return false
-      }
-      return true
-    case (.paused(let a), .paused(let b)):
       return a == b
+    case (.paused(let a, let aa), .paused(let b, let bb)):
+      return a == b && aa == bb
     case (.listening(let a), .listening(let b)):
       return a == b
     case (.preparing(let a), .preparing(let b)):

@@ -12,6 +12,14 @@ import FeedKit
 import Foundation
 import os.log
 
+/*
+ 2018-04-04 15:55:57.539715+0200 Podest[22956:16099261] *** Terminating app due to uncaught exception 'NSRangeException', reason: 'Cannot remove an observer <Playback.PlaybackSession 0x106632610> for the key path "status" from <AVPlayerItem 0x1c0008ec0> because it is not registered as an observer.'
+ *** First throw call stack:
+ (0x180ee7164 0x180130528 0x180ee70ac 0x181807a18 0x181807508 0x181807450 0x104d35dc8 0x104d3615c 0x104d38ca0 0x104d1cc64 0x104d428a8 0x104d44c10 0x1044b591c 0x1044b5fb8 0x18a49ecd0 0x184f2b948 0x184f2fad0 0x184e9c31c 0x184ec3b40 0x184ec4980 0x180e8ecdc 0x180e8c694 0x180e8cc50 0x180dacc58 0x182c58f84 0x18a5055c4 0x10454b818 0x1808cc56c)
+ 2018-04-04 15:55:57.541242+0200 Podest[22956:16099353] [session] new state: PlaybackState: paused: (Entry: { FUF#072 – Luke, Kanye, Dave, Mos und ich, 66490a22812993d94e33f753242ff9e6ad324cf5 }, nil), old state: PlaybackState: paused: (Entry: { Midnight at the OASIS Edition, c0fdb94b603dc3bb6ea878c15501f383618018ba }, nil)
+ libc++abi.dylib: terminating with uncaught exception of type NSException
+ */
+
 let log = OSLog(subsystem: "ink.codes.playback", category: "session")
 
 /// Persists play times.
@@ -112,7 +120,7 @@ public final class PlaybackSession: NSObject, Playback {
 
     return st
   }
-
+  
   /// Resumes playback of the current item.
   public func seek(playing: Bool) -> PlaybackState {
     guard
@@ -129,7 +137,7 @@ public final class PlaybackSession: NSObject, Playback {
 
     let newState: PlaybackState = {
       guard playing else {
-        return .paused(entry)
+        return .paused(entry, nil)
       }
       return isVideo(tracks: tracks, type: enclosure.type)
         ? .viewing(entry, player)
@@ -199,7 +207,7 @@ public final class PlaybackSession: NSObject, Playback {
       let error = PlaybackError.failed
       state = event(.error(error))
     case .unknown:
-      let error = PlaybackError.unknown
+      let error = PlaybackError.unknown(nil)
       state = event(.error(error))
     }
   }
@@ -420,7 +428,7 @@ public final class PlaybackSession: NSObject, Playback {
 
     player = makeAVPlayer(url: proxiedURL)
 
-    return .paused(entry)
+    return .paused(entry, nil)
   }
 
   // MARK: - FSM
@@ -458,33 +466,34 @@ public final class PlaybackSession: NSObject, Playback {
 
   public private(set) var state: PlaybackState {
     get {
-      return sQueue.sync {
+     
         return _state
-      }
+      
     }
 
     set {
-      sQueue.sync {
+      
         os_log("new state: %{public}@, old state: %{public}@",
           log: log, type: .debug,
           newValue.description, _state.description
         )
-
-        guard newValue != _state else {
-          return
-        }
-
+        
+        let needsUpdate = newValue != _state
         _state = newValue
 
+        delegate?.playback(session: self, didChange: _state)
+
+        guard needsUpdate else {
+          return
+        }
+        
         switch _state {
-        case .paused(let entry), .preparing(let entry):
+        case .paused(let entry, _), .preparing(let entry):
           NowPlaying.set(entry: entry, player: player)
         case .inactive, .listening, .viewing:
           break
         }
-
-        delegate?.playback(session: self, didChange: _state)
-      }
+      
     }
 
   }
@@ -495,10 +504,11 @@ public final class PlaybackSession: NSObject, Playback {
   /// Returns the new playback state after processing event `e` appropriately
   /// to the current state.
   private func event(_ e: PlaybackEvent) -> PlaybackState {
+    return sQueue.sync {
     os_log("event: %@", log: log, type: .debug, e.description)
 
     // MARK: occured while:
-    switch state {
+    switch _state {
 
     case .inactive(let fault):
        // MARK: inactive
@@ -516,10 +526,7 @@ public final class PlaybackSession: NSObject, Playback {
         return pause(newEntry)
 
       case .play(let entry):
-        guard entry == currentEntry else {
-          return state
-        }
-        return playback(currentEntry!)
+        return playback(entry)
 
       case .end, .error, .paused, .playing, .ready, .video:
         os_log("""
@@ -531,44 +538,45 @@ public final class PlaybackSession: NSObject, Playback {
         fatalError(String(describing: e))
       }
 
-    case .paused:
+    case .paused(let pausedEntry, let pausedError):
       // MARK: paused
       switch e {
       case .change(let entry):
+        guard entry != pausedEntry else {
+          return _state
+        }
         guard let newEntry = entry else {
           return deactivate()
         }
         return pause(newEntry)
 
       case .play(let entry):
-        guard entry == currentEntry else {
-          return state
-        }
+        assert(entry == pausedEntry)
         guard let player = self.player else {
           fatalError("impossible")
         }
         switch player.status {
         case .unknown:
           shouldPlay = true
-          return state
+          return _state
         case .readyToPlay:
-          return playback(currentEntry!)
+          return playback(pausedEntry)
         case .failed:
           fatalError("failed")
         }
 
       case .playing: // TODO: Add entry
         shouldPlay = false
-        guard let entry = currentEntry,
+        guard
           let player = self.player,
           let tracks = player.currentItem?.tracks,
-          let type = entry.enclosure?.type else {
+          let type = pausedEntry.enclosure?.type else {
           fatalError("impossible")
         }
         if isVideo(tracks: tracks, type: type) {
-          return .viewing(entry, player)
+          return .viewing(pausedEntry, player)
         } else {
-          return .listening(entry)
+          return .listening(pausedEntry)
         }
 
       case .ready:
@@ -581,9 +589,13 @@ public final class PlaybackSession: NSObject, Playback {
             while: %{public}@
           }
           """, log: log, type: .debug, e.description, state.description)
-        return state
+        return _state
+        
+      case .error(let er):
+        player?.pause()
+        return .paused(pausedEntry, er)
 
-      case .end, .error:
+      case .end:
         os_log("""
           unhandled: {
             event: %{public}@
@@ -593,33 +605,32 @@ public final class PlaybackSession: NSObject, Playback {
         fatalError(String(describing: e))
       }
 
-    case .preparing(let entry):
+    case .preparing(let preparingEntry):
       // MARK: preparing
       switch e {
       case .error(let er):
-        delegate?.playback(session: self, error: er)
-        return .paused(entry)
+        return .paused(preparingEntry, er)
 
       case .play(let entry):
-        guard entry == currentEntry else {
-          return state
+        guard entry == preparingEntry else {
+          return _state
         }
-        return playback(currentEntry!)
+        return playback(preparingEntry)
 
       case .paused:
-        return .paused(entry)
+        return .paused(preparingEntry, nil)
 
       case .ready:
         return seek(playing: true)
 
       case .change(let entry):
+        guard entry != preparingEntry else {
+          return _state
+        }
         guard let newEntry = entry else {
           return deactivate()
         }
-        guard newEntry == currentEntry else {
-          return state
-        }
-        return playback(currentEntry!)
+        return playback(newEntry)
 
       case .video:
         os_log("""
@@ -640,30 +651,33 @@ public final class PlaybackSession: NSObject, Playback {
         fatalError(String(describing: e))
       }
 
-    case .listening(let entry), .viewing(let entry, _):
+    case .listening(let consumingEntry), .viewing(let consumingEntry, _):
       // MARK: listening or viewing
       switch e {
       case .error(let er):
-        delegate?.playback(session: self, error: er)
-        return state
+        player?.pause()
+        return .paused(consumingEntry, er)
 
       case .paused, .end:
         setCurrentTime()
-        return .paused(entry)
+        return .paused(consumingEntry, nil)
 
-      case .change(let newEntry):
+      case .change(let changingEntry):
+        guard changingEntry != consumingEntry else {
+          return _state
+        }
         setCurrentTime()
-        guard let actualEntry = newEntry else {
+        guard let actualEntry = changingEntry else {
           return deactivate()
         }
         return playback(actualEntry)
 
       case .play(let entry):
-        guard entry == currentEntry else {
-          return state
+        guard entry == consumingEntry else {
+          return _state
         }
         player?.play()
-        return state
+        return _state
 
       case .ready, .playing:
         os_log("""
@@ -672,7 +686,7 @@ public final class PlaybackSession: NSObject, Playback {
             while: %{public}@
           }
           """, log: log, type: .debug, e.description, state.description)
-        return state
+        return _state
 
       case .video:
         os_log("""
@@ -685,7 +699,7 @@ public final class PlaybackSession: NSObject, Playback {
       }
 
     }
-
+    }
   }
 
 }
@@ -707,7 +721,7 @@ extension PlaybackSession {
     do {
       try AVAudioSession.sharedInstance().setActive(false)
     } catch {
-      return .inactive(error)
+      return .inactive(.unknown(error))
     }
     return .inactive(nil)
   }
@@ -721,6 +735,33 @@ extension PlaybackSession {
 // MARK: - Playing
 
 extension PlaybackSession: Playing {
+  
+  public var currentEntry: Entry? {
+    get {
+      switch state {
+      case .preparing(let entry),
+           .listening(let entry),
+           .viewing(let entry, _),
+           .paused(let entry, _):
+        return entry
+      case .inactive:
+        return nil
+      }
+    }
+    
+    set {
+      guard newValue != currentEntry else {
+        return
+      }
+      
+      if let entry = newValue {
+        assert(entry.enclosure != nil, "URL required")
+      }
+      
+      state = event(.change(newValue))
+    }
+    
+  }
   
   public func forward() -> Bool {
     guard let item = delegate?.nextItem() else {
@@ -751,33 +792,6 @@ extension PlaybackSession: Playing {
     currentEntry = item
     
     return true
-  }
-  
-  public var currentEntry: Entry? {
-    get {
-      switch state {
-      case .preparing(let entry),
-           .listening(let entry),
-           .viewing(let entry, _),
-           .paused(let entry):
-        return entry
-      case .inactive:
-        return nil
-      }
-    }
-
-    set {
-      guard newValue != currentEntry else {
-        return
-      }
-
-      if let entry = newValue {
-        assert(entry.enclosure != nil, "URL required")
-      }
-
-      state = event(.change(newValue))
-    }
-
   }
 
   @discardableResult
