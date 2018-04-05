@@ -14,26 +14,27 @@ import FeedKit
 
 /// Enumerates playback errors.
 public enum PlaybackError: Error {
-  case unknown(Error?)
+  case unknown
   case failed
   case log
+  case notSupportedMediaFormat
+  case couldNotDeactivateSession
 }
 
 extension PlaybackError: Equatable {
   public static func == (lhs: PlaybackError, rhs: PlaybackError) -> Bool {
     switch (lhs, rhs) {
-    case (.unknown(let a), .unknown(let b)):
-      guard a == nil, b == nil else {
-        // Unfortunately, there’s no simple way to compare errors. So, even if
-        // the two had the same error, this would return false.
-        return false
-      }
+    case (.unknown, .unknown),
+         (.failed, .failed),
+         (.log, .log),
+         (.notSupportedMediaFormat, .notSupportedMediaFormat),
+         (.couldNotDeactivateSession, .couldNotDeactivateSession):
       return true
-    case (.failed, .failed):
-      return true
-    case (.log, .log):
-      return true
-    case (.unknown, _), (.failed, _), (.log, _):
+    case (.unknown, _),
+         (.failed, _),
+         (.log, _),
+         (.notSupportedMediaFormat, _),
+         (.couldNotDeactivateSession, _):
       return false
     }
   }

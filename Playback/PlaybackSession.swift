@@ -206,11 +206,10 @@ public final class PlaybackSession: NSObject, Playback {
     case .readyToPlay:
       state = event(.ready)
     case .failed:
-      let error = PlaybackError.failed
-      state = event(.error(error))
+      state = event(.error(.failed))
     case .unknown:
-      let error = PlaybackError.unknown(nil)
-      state = event(.error(error))
+      // TODO: Is this even an error?
+      state = event(.error(.unknown))
     }
   }
 
@@ -589,6 +588,19 @@ public final class PlaybackSession: NSObject, Playback {
           DispatchQueue.global().async {
             self.player?.pause()
           }
+          if let itemError = self.player?.currentItem?.error {
+            switch itemError {
+            case let avError as NSError:
+              switch avError.code {
+              case -11828:
+                return .paused(pausedEntry, .notSupportedMediaFormat)
+              default:
+                break
+              }
+            }
+            os_log("error while paused: %{public}@", log: log, type: .error,
+                   itemError as CVarArg)
+          }
           return .paused(pausedEntry, er)
           
         case .end:
@@ -605,6 +617,10 @@ public final class PlaybackSession: NSObject, Playback {
         // MARK: preparing
         switch e {
         case .error(let er):
+          if let itemError = self.player?.currentItem?.error {
+            os_log("error while preparing: %{public}@", log: log, type: .error,
+                   itemError as CVarArg)
+          }
           return .paused(preparingEntry, er)
           
         case .resume:
@@ -675,6 +691,10 @@ public final class PlaybackSession: NSObject, Playback {
         // MARK: listening or viewing
         switch e {
         case .error(let er):
+          if let itemError = self.player?.currentItem?.error {
+            os_log("error while listening or viewing: %{public}@",
+                   log: log, type: .error, itemError as CVarArg)
+          }
           DispatchQueue.global().async {
             self.player?.pause()
           }
@@ -743,7 +763,7 @@ extension PlaybackSession {
       do {
         try AVAudioSession.sharedInstance().setActive(false)
       } catch {
-        return .inactive(.unknown(error))
+        return .inactive(.couldNotDeactivateSession)
       }
       return .inactive(nil)
     }
