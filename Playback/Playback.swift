@@ -22,6 +22,7 @@ public enum PlaybackError: Error {
 }
 
 extension PlaybackError: Equatable {
+  
   public static func == (lhs: PlaybackError, rhs: PlaybackError) -> Bool {
     switch (lhs, rhs) {
     case (.unknown, .unknown),

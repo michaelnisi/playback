@@ -30,6 +30,28 @@ public enum PlaybackState {
   /// Playing a visual item.
   case viewing(Entry, AVPlayer)
   
+  /// Conveniently initializes paused state including playback error.
+  ///
+  /// - Parameters:
+  ///   - entry: The entry being paused as a result of an error.
+  ///   - error: The error that caused the problem.
+  init(paused entry: Entry, error: Error) {
+    let playbackError: PlaybackError = {
+      switch error {
+      case let avError as NSError:
+        switch avError.code {
+        case AVError.fileFormatNotRecognized.rawValue,
+             AVError.failedToLoadMediaData.rawValue,
+             AVError.undecodableMediaData.rawValue:
+          return .notSupportedMediaFormat
+        default:
+          return .unknown
+        }
+      }
+    }()
+    self = .paused(entry, playbackError)
+  }
+  
 }
 
 extension PlaybackState: Equatable {

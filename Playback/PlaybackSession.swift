@@ -12,14 +12,6 @@ import FeedKit
 import Foundation
 import os.log
 
-/*
- 2018-04-04 15:55:57.539715+0200 Podest[22956:16099261] *** Terminating app due to uncaught exception 'NSRangeException', reason: 'Cannot remove an observer <Playback.PlaybackSession 0x106632610> for the key path "status" from <AVPlayerItem 0x1c0008ec0> because it is not registered as an observer.'
- *** First throw call stack:
- (0x180ee7164 0x180130528 0x180ee70ac 0x181807a18 0x181807508 0x181807450 0x104d35dc8 0x104d3615c 0x104d38ca0 0x104d1cc64 0x104d428a8 0x104d44c10 0x1044b591c 0x1044b5fb8 0x18a49ecd0 0x184f2b948 0x184f2fad0 0x184e9c31c 0x184ec3b40 0x184ec4980 0x180e8ecdc 0x180e8c694 0x180e8cc50 0x180dacc58 0x182c58f84 0x18a5055c4 0x10454b818 0x1808cc56c)
- 2018-04-04 15:55:57.541242+0200 Podest[22956:16099353] [session] new state: PlaybackState: paused: (Entry: { FUF#072 – Luke, Kanye, Dave, Mos und ich, 66490a22812993d94e33f753242ff9e6ad324cf5 }, nil), old state: PlaybackState: paused: (Entry: { Midnight at the OASIS Edition, c0fdb94b603dc3bb6ea878c15501f383618018ba }, nil)
- libc++abi.dylib: terminating with uncaught exception of type NSException
- */
-
 let log = OSLog(subsystem: "ink.codes.playback", category: "session")
 
 /// Persists play times.
@@ -550,6 +542,7 @@ public final class PlaybackSession: NSObject, Playback {
           }
           switch player.status {
           case .unknown:
+            // TODO: Review keeping previous state here
             shouldPlay = true
             return state
           case .readyToPlay:
@@ -588,20 +581,10 @@ public final class PlaybackSession: NSObject, Playback {
           DispatchQueue.global().async {
             self.player?.pause()
           }
-          if let itemError = self.player?.currentItem?.error {
-            switch itemError {
-            case let avError as NSError:
-              switch avError.code {
-              case -11828:
-                return .paused(pausedEntry, .notSupportedMediaFormat)
-              default:
-                break
-              }
-            }
-            os_log("error while paused: %{public}@", log: log, type: .error,
-                   itemError as CVarArg)
-          }
-          return .paused(pausedEntry, er)
+          let itemError = self.player?.currentItem?.error ?? er
+          os_log("error while paused: %{public}@", log: log, type: .error,
+                 itemError as CVarArg)
+          return PlaybackState(paused: pausedEntry, error: itemError)
           
         case .end:
           os_log("""
@@ -617,11 +600,13 @@ public final class PlaybackSession: NSObject, Playback {
         // MARK: preparing
         switch e {
         case .error(let er):
-          if let itemError = self.player?.currentItem?.error {
-            os_log("error while preparing: %{public}@", log: log, type: .error,
-                   itemError as CVarArg)
+          DispatchQueue.global().async {
+            self.player?.pause()
           }
-          return .paused(preparingEntry, er)
+          let itemError = self.player?.currentItem?.error ?? er
+          os_log("error while preparing: %{public}@", log: log, type: .error,
+                 itemError as CVarArg)
+          return PlaybackState(paused: preparingEntry, error: itemError)
           
         case .resume:
           DispatchQueue.global().async {
@@ -660,7 +645,7 @@ public final class PlaybackSession: NSObject, Playback {
             let player = self.player,
             let tracks = player.currentItem?.tracks,
             let type = preparingEntry.enclosure?.type else {
-              fatalError("impossible")
+            fatalError("impossible")
           }
           if isVideo(tracks: tracks, type: type) {
             return .viewing(preparingEntry, player)
@@ -691,14 +676,13 @@ public final class PlaybackSession: NSObject, Playback {
         // MARK: listening or viewing
         switch e {
         case .error(let er):
-          if let itemError = self.player?.currentItem?.error {
-            os_log("error while listening or viewing: %{public}@",
-                   log: log, type: .error, itemError as CVarArg)
-          }
           DispatchQueue.global().async {
             self.player?.pause()
           }
-          return .paused(consumingEntry, er)
+          let itemError = self.player?.currentItem?.error ?? er
+          os_log("error while listening or viewing: %{public}@",
+                 log: log, type: .error, itemError as CVarArg)
+          return PlaybackState(paused: consumingEntry, error: itemError)
           
         case .paused, .end:
           setCurrentTime()
