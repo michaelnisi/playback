@@ -499,7 +499,7 @@ public final class PlaybackSession: NSObject, Playback {
 
   /// Returns the new playback state after processing event `e` appropriately
   /// to the current state. The event handler of the state machine, where the
-  /// shit hits the fan.
+  /// shit hits the fan. **Don’t block!**
   private func event(_ e: PlaybackEvent) -> PlaybackState {
     return sQueue.sync {
       os_log("event: %@", log: log, type: .debug, e.description)
@@ -586,7 +586,9 @@ public final class PlaybackSession: NSObject, Playback {
           return state
           
         case .error(let er):
-          player?.pause()
+          DispatchQueue.global().async {
+            self.player?.pause()
+          }
           return .paused(pausedEntry, er)
           
         case .end:
@@ -606,11 +608,15 @@ public final class PlaybackSession: NSObject, Playback {
           return .paused(preparingEntry, er)
           
         case .resume:
-          player?.play()
+          DispatchQueue.global().async {
+            self.player?.play()
+          }
           return state
           
         case .pause:
-          player?.pause()
+          DispatchQueue.global().async {
+            self.player?.pause()
+          }
           return state
           
         case .toggle:
@@ -669,7 +675,9 @@ public final class PlaybackSession: NSObject, Playback {
         // MARK: listening or viewing
         switch e {
         case .error(let er):
-          player?.pause()
+          DispatchQueue.global().async {
+            self.player?.pause()
+          }
           return .paused(consumingEntry, er)
           
         case .paused, .end:
