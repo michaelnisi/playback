@@ -80,23 +80,16 @@ extension PlaybackState: CustomStringConvertible {
 
 /// Enumerates events of the playback FSM.
 enum PlaybackEvent {
-  
-  /// The change event occures after the current entry has changed to a
-  /// different entry or to `nil`.
   case change(Entry?)
-  
   case end
   case error(PlaybackError)
   case paused
-  
-  /// Plays the current entry. If the enclosed entry is not the current entry,
-  /// this event get ignored.
-  case play(Entry)
-  
+  case resume
+  case pause
+  case toggle
   case playing
   case ready
   case video
-  
 }
 
 extension PlaybackEvent: CustomStringConvertible {
@@ -105,14 +98,18 @@ extension PlaybackEvent: CustomStringConvertible {
     switch self {
     case .change(let entry):
       return "PlaybackEvent: change: \(String(describing: entry))"
+    case .resume:
+      return "PlaybackEvent: resume"
+    case .pause:
+      return "PlaybackEvent: pause"
     case .end:
       return "PlaybackEvent: end"
     case .error(let error):
       return "PlaybackEvent: error: \(error)"
     case .paused:
       return "PlaybackEvent: paused"
-    case .play:
-      return "PlaybackEvent: play"
+    case .toggle:
+      return "PlaybackEvent: toggle"
     case .playing:
       return "PlaybackEvent: playing"
     case .ready:

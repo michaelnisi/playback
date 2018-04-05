@@ -79,6 +79,10 @@ public protocol Playing {
   @discardableResult
   func pause() -> Bool
   
+  /// Toggles between playing and pausing the current item.
+  @discardableResult
+  func toggle() -> Bool
+  
   /// Sets current to the next item from the delegate.
   @discardableResult
   func forward() -> Bool

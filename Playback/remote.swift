@@ -35,12 +35,7 @@ extension PlaybackSession: RemoteCommanding {
   }
   
   func onToggle(event: MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus {
-    // TODO: Don’t query the state here, just post the event
-    if case .paused = state {
-      return status(resume())
-    } else {
-      return status(pause())
-    }
+    return status(toggle())
   }
   
   func onPreviousTrack(event: MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus {
