@@ -17,8 +17,9 @@ public enum PlaybackError: Error {
   case unknown
   case failed
   case log
-  case notSupportedMediaFormat
-  case couldNotDeactivateSession
+  case media
+  case session
+  case surprising(Error)
 }
 
 extension PlaybackError: Equatable {
@@ -28,14 +29,16 @@ extension PlaybackError: Equatable {
     case (.unknown, .unknown),
          (.failed, .failed),
          (.log, .log),
-         (.notSupportedMediaFormat, .notSupportedMediaFormat),
-         (.couldNotDeactivateSession, .couldNotDeactivateSession):
+         (.media, .media),
+         (.session, .session),
+         (.surprising, .surprising):
       return true
     case (.unknown, _),
          (.failed, _),
          (.log, _),
-         (.notSupportedMediaFormat, _),
-         (.couldNotDeactivateSession, _):
+         (.media, _),
+         (.session, _),
+         (.surprising, _):
       return false
     }
   }

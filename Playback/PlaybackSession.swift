@@ -747,7 +747,7 @@ extension PlaybackSession {
       do {
         try AVAudioSession.sharedInstance().setActive(false)
       } catch {
-        return .inactive(.couldNotDeactivateSession)
+        return .inactive(.session)
       }
       return .inactive(nil)
     }

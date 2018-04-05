@@ -30,7 +30,8 @@ public enum PlaybackState {
   /// Playing a visual item.
   case viewing(Entry, AVPlayer)
   
-  /// Conveniently initializes paused state including playback error.
+  /// Conveniently initializes paused state including playback error, for all
+  /// states transfer to `.paused(Entry, PlaybackError)` after an error event.
   ///
   /// - Parameters:
   ///   - entry: The entry being paused as a result of an error.
@@ -43,9 +44,9 @@ public enum PlaybackState {
         case AVError.fileFormatNotRecognized.rawValue,
              AVError.failedToLoadMediaData.rawValue,
              AVError.undecodableMediaData.rawValue:
-          return .notSupportedMediaFormat
+          return .media
         default:
-          return .unknown
+          return .surprising(error)
         }
       }
     }()
