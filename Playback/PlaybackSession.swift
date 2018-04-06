@@ -354,8 +354,6 @@ public final class PlaybackSession: NSObject, Playback {
     let asset = freshAsset(url: url)
     let item = freshItem(asset: asset)
 
-    let start = Date()
-
     let newPlayer = AVPlayer(playerItem: item)
     newPlayer.actionAtItemEnd = .pause
 
@@ -369,10 +367,6 @@ public final class PlaybackSession: NSObject, Playback {
     if let oldPlayer = self.player {
       oldPlayer.removeObserver(self, forKeyPath: keyPath, context: &playerContext)
     }
-
-    let took = start.timeIntervalSinceNow
-    os_log("** took %@ seconds to create a new player",
-           log: log, type: .debug, took.description)
 
     return newPlayer
   }
@@ -493,7 +487,7 @@ public final class PlaybackSession: NSObject, Playback {
   /// shit hits the fan. **Don’t block!**
   private func event(_ e: PlaybackEvent) -> PlaybackState {
     return sQueue.sync {
-      os_log("event: %@", log: log, type: .debug, e.description)
+      os_log("event: %{public}@", log: log, type: .debug, e.description)
       
       // MARK: occured while:
       switch state {
@@ -551,7 +545,7 @@ public final class PlaybackSession: NSObject, Playback {
             fatalError("failed")
           }
         
-        case .playing: // TODO: Add entry
+        case .playing:
           shouldPlay = false
           guard
             let player = self.player,
@@ -790,40 +784,10 @@ extension PlaybackSession: Playing {
     
   }
   
-  public func forward() -> Bool {
-    guard let item = delegate?.nextItem() else {
-      return false
-    }
-    currentEntry = item
-    return true
-  }
-  
-  public func backward() -> Bool {
-    // Skipping back to beginning with a threshold has been decided against.
-//    if
-//      let url = currentEntry?.enclosure?.url,
-//      player?.rate != 0,
-//      let t = player?.currentTime() {
-//      let threshold = CMTime(seconds: 5, preferredTimescale: t.timescale)
-//      let leading = CMTimeCompare(t, threshold)
-//      guard leading == -1 else {
-//        player?.seek(to: CMTime(seconds: 0, preferredTimescale: t.timescale))
-//        times.removeTime(for: url)
-//        return true
-//      }
-//    }
-    
-    guard let item = delegate?.previousItem() else {
-      return false
-    }
-    currentEntry = item
-    return true
-  }
-
   /// Synchronously checking the playback state with this function isn’t
   /// reliable, for its asynchronous nature. Paused state, for example,
   /// is entered after a delay, when the playback actually has been paused.
-  private static func check(state: PlaybackState) -> Bool {
+  private func checkState() -> Bool {
     switch state {
     case .paused(_, let error):
       return error == nil
@@ -834,12 +798,42 @@ extension PlaybackSession: Playing {
     }
   }
   
+  public func forward() -> Bool {
+    guard let item = delegate?.nextItem() else {
+      return false
+    }
+    
+    currentEntry = item
+
+    guard checkState() else {
+      os_log("forward command failed", log: log, type: .error)
+      return false
+    }
+    
+    return true
+  }
+  
+  public func backward() -> Bool {
+    guard let item = delegate?.previousItem() else {
+      return false
+    }
+    
+    currentEntry = item
+
+    guard checkState() else {
+      os_log("backward command failed", log: log, type: .error)
+      return false
+    }
+    
+    return true
+  }
+  
   @discardableResult
   public func resume() -> Bool {
     state = event(.resume)
     
-    guard PlaybackSession.check(state: state) else {
-      os_log("resuming failed", log: log, type: .error)
+    guard checkState() else {
+      os_log("resume command failed", log: log, type: .error)
       return false
     }
     
@@ -850,8 +844,8 @@ extension PlaybackSession: Playing {
   public func pause() -> Bool {
     state = event(.pause)
     
-    guard PlaybackSession.check(state: state) else {
-      os_log("pausing failed", log: log, type: .error)
+    guard checkState() else {
+      os_log("pause command failed", log: log, type: .error)
       return false
     }
     
@@ -862,8 +856,8 @@ extension PlaybackSession: Playing {
   public func toggle() -> Bool {
     state = event(.toggle)
     
-    guard PlaybackSession.check(state: state) else {
-      os_log("toggling failed", log: log, type: .error)
+    guard checkState() else {
+      os_log("toggle command failed", log: log, type: .error)
       return false
     }
     
