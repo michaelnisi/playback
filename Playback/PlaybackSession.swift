@@ -121,7 +121,7 @@ public final class PlaybackSession: NSObject, Playback {
         let entry = self.currentEntry,
         let enclosure = entry.enclosure,
         let tracks = player.currentItem?.tracks else {
-          fatalError("requirements to seek and play not met")
+        fatalError("requirements to seek and play not met")
       }
       
       guard player.rate != 1, !tracks.isEmpty else {
@@ -146,12 +146,12 @@ public final class PlaybackSession: NSObject, Playback {
       
       player.currentItem?.cancelPendingSeeks()
       
-      player.seek(to: time) { [weak self] finished in
+      player.seek(to: time) { finished in
         guard finished else {
           return
         }
-        DispatchQueue.main.async { [weak self] in
-          if playing || self?.shouldPlay ?? false {
+        DispatchQueue.main.async {
+          if playing {
             player.play()
           }
           NowPlaying.set(entry: entry, player: player)
@@ -371,7 +371,7 @@ public final class PlaybackSession: NSObject, Playback {
     return newPlayer
   }
 
-  private func playback(_ entry: Entry) -> PlaybackState {
+  private func playback(_ entry: Entry, shouldPlay: Bool = true) -> PlaybackState {
     return DispatchQueue.global().sync {
       guard let urlString = entry.enclosure?.url,
         let url = URL(string: urlString) else
@@ -390,35 +390,12 @@ public final class PlaybackSession: NSObject, Playback {
       }
       
       guard assetURL != proxiedURL else {
-        return seek(playing: true)
+        return seek(playing: shouldPlay)
       }
       
       player = makeAVPlayer(url: proxiedURL)
       
-      return .preparing(entry)
-    }
-  }
-
-  private func pause(_ entry: Entry) -> PlaybackState {
-    return DispatchQueue.global().sync {
-      guard
-        let urlString = entry.enclosure?.url,
-        let url = URL(string: urlString) else {
-          fatalError("unhandled error: invalid enclosure: \(entry)")
-      }
-      
-      guard let proxiedURL = delegate?.proxy(url: url) else {
-        os_log("aborting playback: not reachable: %@", log: log, url.absoluteString)
-        return event(.paused)
-      }
-      
-      guard assetURL != proxiedURL else {
-        return seek(playing: false)
-      }
-      
-      player = makeAVPlayer(url: proxiedURL)
-      
-      return .paused(entry, nil)
+      return .preparing(entry, shouldPlay)
     }
   }
 
@@ -459,17 +436,25 @@ public final class PlaybackSession: NSObject, Playback {
              log: log, type: .debug,
              state.description, oldValue.description
       )
+
+      let needsUpdate: Bool = {
+        guard state == oldValue else {
+          return true
+        }
+        if case .paused(_, let error) = state {
+          return error != nil
+        }
+        return false
+      }()
       
-      let needsUpdate = state != oldValue
-
-      delegate?.playback(session: self, didChange: state)
-
       guard needsUpdate else {
         return
       }
       
+      delegate?.playback(session: self, didChange: state)
+      
       switch state {
-      case .paused(let entry, _), .preparing(let entry):
+      case .paused(let entry, _), .preparing(let entry, _):
         NowPlaying.set(entry: entry, player: player)
       case .inactive, .listening, .viewing:
         break
@@ -477,12 +462,6 @@ public final class PlaybackSession: NSObject, Playback {
     }
     
   }
-
-  // TODO: Incorporate into .preparing state
-  
-  /// A stupid flag that should not be here, telling us wether, when ready after
-  /// preparing, we should start playing.
-  private var shouldPlay = false
 
   /// Returns the new playback state after processing event `e` appropriately
   /// to the current state. The event handler of the state machine, where the
@@ -512,7 +491,7 @@ public final class PlaybackSession: NSObject, Playback {
           } catch {
             return .inactive(.session)
           }
-          return pause(newEntry)
+          return playback(newEntry, shouldPlay: false)
           
         case .end, .error, .paused, .playing, .ready, .video,
              .toggle, .resume, .pause:
@@ -525,7 +504,7 @@ public final class PlaybackSession: NSObject, Playback {
           fatalError(String(describing: e))
         }
         
-      case .paused(let pausedEntry, _):
+      case .paused(let pausedEntry, let pausedError):
         // MARK: paused
         switch e {
         case .change(let entry):
@@ -535,30 +514,17 @@ public final class PlaybackSession: NSObject, Playback {
           guard let newEntry = entry else {
             return deactivate()
           }
-          return pause(newEntry)
+          return playback(newEntry, shouldPlay: false)
           
         case .toggle, .resume:
-          guard let player = self.player else {
-            fatalError("impossible")
-          }
-          switch player.status {
-          case .unknown:
-            // TODO: Review keeping previous state here
-            shouldPlay = true
-            return state
-          case .readyToPlay:
-            return playback(pausedEntry)
-          case .failed:
-            fatalError("failed")
-          }
-        
+          return playback(pausedEntry, shouldPlay: true)
+
         case .playing:
-          shouldPlay = false
           guard
             let player = self.player,
             let tracks = player.currentItem?.tracks,
             let type = pausedEntry.enclosure?.type else {
-              fatalError("impossible")
+            fatalError("impossible")
           }
           if isVideo(tracks: tracks, type: type) {
             return .viewing(pausedEntry, player)
@@ -597,7 +563,7 @@ public final class PlaybackSession: NSObject, Playback {
           fatalError(String(describing: e))
         }
         
-      case .preparing(let preparingEntry):
+      case .preparing(let preparingEntry, let preparingShouldPlay):
         // MARK: preparing
         switch e {
         case .error(let er):
@@ -610,8 +576,7 @@ public final class PlaybackSession: NSObject, Playback {
           return PlaybackState(paused: preparingEntry, error: itemError)
           
         case .resume:
-          shouldPlay = true
-          return state
+          return .preparing(preparingEntry, true)
           
         case .pause:
           DispatchQueue.global().async {
@@ -620,14 +585,13 @@ public final class PlaybackSession: NSObject, Playback {
           return state
           
         case .toggle:
-          shouldPlay = !shouldPlay
-          return state
+          return .preparing(preparingEntry, !preparingShouldPlay)
           
         case .paused:
           return .paused(preparingEntry, nil)
           
         case .ready:
-          return seek(playing: true)
+          return seek(playing: preparingShouldPlay)
           
         case .change(let entry):
           guard entry != preparingEntry else {
@@ -636,10 +600,9 @@ public final class PlaybackSession: NSObject, Playback {
           guard let newEntry = entry else {
             return deactivate()
           }
-          return playback(newEntry)
+          return playback(newEntry, shouldPlay: preparingShouldPlay)
           
         case .playing:
-          shouldPlay = false
           guard
             let player = self.player,
             let tracks = player.currentItem?.tracks,
@@ -765,7 +728,7 @@ extension PlaybackSession: Playing {
   public var currentEntry: Entry? {
     get {
       switch state {
-      case .preparing(let entry),
+      case .preparing(let entry, _),
            .listening(let entry),
            .viewing(let entry, _),
            .paused(let entry, _):
@@ -841,7 +804,7 @@ extension PlaybackSession: Playing {
       os_log("resume command failed", log: log, type: .error)
       return false
     }
-    
+
     return true
   }
   

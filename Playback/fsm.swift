@@ -22,7 +22,7 @@ public enum PlaybackState {
   case paused(Entry, PlaybackError?)
   
   /// Preparing a new item for playback.
-  case preparing(Entry)
+  case preparing(Entry, Bool)
   
   /// Playing an audible item.
   case listening(Entry)
