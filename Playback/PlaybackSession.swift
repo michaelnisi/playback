@@ -41,7 +41,7 @@ public final class PlaybackSession: NSObject, Playback {
   public init(times: Times) {
     self.times = times
     super.init()
-    try! activate()
+//    try! activate()
   }
 
   public var delegate: PlaybackDelegate?
@@ -463,7 +463,7 @@ public final class PlaybackSession: NSObject, Playback {
       let needsUpdate = state != oldValue
 
       delegate?.playback(session: self, didChange: state)
-      
+
       guard needsUpdate else {
         return
       }
@@ -478,6 +478,8 @@ public final class PlaybackSession: NSObject, Playback {
     
   }
 
+  // TODO: Incorporate into .preparing state
+  
   /// A stupid flag that should not be here, telling us wether, when ready after
   /// preparing, we should start playing.
   private var shouldPlay = false
@@ -504,6 +506,11 @@ public final class PlaybackSession: NSObject, Playback {
         case .change(let entry):
           guard let newEntry = entry else {
             return deactivate()
+          }
+          do {
+            try activate()
+          } catch {
+            return .inactive(.session)
           }
           return pause(newEntry)
           
@@ -603,9 +610,7 @@ public final class PlaybackSession: NSObject, Playback {
           return PlaybackState(paused: preparingEntry, error: itemError)
           
         case .resume:
-          DispatchQueue.global().async {
-            self.player?.play()
-          }
+          shouldPlay = true
           return state
           
         case .pause:

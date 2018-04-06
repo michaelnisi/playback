@@ -41,6 +41,8 @@ public final class TimeRepository: NSObject, Times {
   private lazy var store = NSUbiquitousKeyValueStore.default
   
   public func time(uid: String) -> CMTime? {
+    os_log("get time: %@ ", log: log, type: .debug, uid)
+    
     let k = TimeRepository.key(from: uid)
 
     guard
@@ -72,7 +74,7 @@ public final class TimeRepository: NSObject, Times {
     let k = TimeRepository.key(from: uid)
     store.set(dict, forKey: k)
     
-    os_log("set seconds: { %@: %@ }", log: log, type: .debug, uid, seconds)
+    os_log("set time: { %@: %@ }", log: log, type: .debug, uid, seconds)
     
     vacuum()
   }
