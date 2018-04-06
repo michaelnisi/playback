@@ -799,6 +799,7 @@ extension PlaybackSession: Playing {
   }
   
   public func backward() -> Bool {
+    // Skipping back to beginning with a threshold has been decided against.
 //    if
 //      let url = currentEntry?.enclosure?.url,
 //      player?.rate != 0,
@@ -815,30 +816,57 @@ extension PlaybackSession: Playing {
     guard let item = delegate?.previousItem() else {
       return false
     }
-    
     currentEntry = item
-    
     return true
   }
 
+  /// Synchronously checking the playback state with this function isn’t
+  /// reliable, for its asynchronous nature. Paused state, for example,
+  /// is entered after a delay, when the playback actually has been paused.
+  private static func check(state: PlaybackState) -> Bool {
+    switch state {
+    case .paused(_, let error):
+      return error == nil
+    case .preparing, .listening, .viewing:
+      return true
+    case .inactive:
+      return false
+    }
+  }
+  
   @discardableResult
   public func resume() -> Bool {
     state = event(.resume)
-    // TODO: Analyze new state to provide better return value
+    
+    guard PlaybackSession.check(state: state) else {
+      os_log("resuming failed", log: log, type: .error)
+      return false
+    }
+    
     return true
   }
   
   @discardableResult
-  public func pause () -> Bool {
+  public func pause() -> Bool {
     state = event(.pause)
-    // TODO: Analyze new state to provide better return value
+    
+    guard PlaybackSession.check(state: state) else {
+      os_log("pausing failed", log: log, type: .error)
+      return false
+    }
+    
     return true
   }
   
   @discardableResult
   public func toggle() -> Bool {
     state = event(.toggle)
-    // TODO: Analyze new state to provide better return value
+    
+    guard PlaybackSession.check(state: state) else {
+      os_log("toggling failed", log: log, type: .error)
+      return false
+    }
+    
     return true
   }
 

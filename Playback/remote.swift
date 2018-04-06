@@ -47,7 +47,7 @@ extension PlaybackSession: RemoteCommanding {
   }
   
   func onSeek(event: MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus {
-    return .commandFailed
+    return .noActionableNowPlayingItem
   }
   
   // MARK: - MPRemoteCommandCenter
