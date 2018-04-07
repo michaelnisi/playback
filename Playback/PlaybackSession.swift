@@ -371,31 +371,27 @@ public final class PlaybackSession: NSObject, Playback {
     return newPlayer
   }
 
-  private func playback(_ entry: Entry, shouldPlay: Bool = true) -> PlaybackState {
+  private func prepare(_ entry: Entry, playing: Bool = true) -> PlaybackState {
     return DispatchQueue.global().sync {
-      guard let urlString = entry.enclosure?.url,
+      guard
+        let urlString = entry.enclosure?.url,
         let url = URL(string: urlString) else
       {
-        // This should never have gotten this far, a valid URL should have been
-        // the starting point.
-        
-        // TODO: Begin with valid URL
-        
         fatalError("unhandled error: invalid enclosure: \(entry)")
       }
       
       guard let proxiedURL = delegate?.proxy(url: url) else {
-        os_log("aborting playback: not reachable: %@", log: log, url.absoluteString)
-        return event(.paused)
+        os_log("could not prepare: unreachable: %@", log: log, url.absoluteString)
+        return event(.error(.unreachable))
       }
       
       guard assetURL != proxiedURL else {
-        return seek(playing: shouldPlay)
+        return seek(playing: playing)
       }
       
       player = makeAVPlayer(url: proxiedURL)
       
-      return .preparing(entry, shouldPlay)
+      return .preparing(entry, playing)
     }
   }
 
@@ -466,11 +462,46 @@ public final class PlaybackSession: NSObject, Playback {
   /// Returns the new playback state after processing event `e` appropriately
   /// to the current state. The event handler of the state machine, where the
   /// shit hits the fan. **Don’t block!**
+  ///
+  /// The playback state machine has five states: inactive, paused, preparing,
+  /// listening, and viewing; where listening and viewing are incorporated.
+  ///
+  /// # inactive
+  ///
+  /// ## change
+  ///
+  /// The `.change(Entry?)` event with an entry activates the session and
+  /// transits to the **paused** state, while `.change` without entry
+  /// deactivates the session remaining in **inactive** state.
+  ///
+  /// # paused
+  ///
+  /// ## change
+  ///
+  /// In **paused** state the current entry can be changed or set to `nil`
+  /// deactivating the session.
+  ///
+  /// ## toggle/resume
+  ///
+  /// Plays the current item, eventually, after transfering to **preparing**,
+  /// which will trigger `ready` or `error` events.
+  ///
+  /// ...
+  ///
+  /// # preparing
+  ///
+  /// ...
+  ///
+  /// # listening/viewing
+  ///
+  /// ...
+  ///
+  ///
   private func event(_ e: PlaybackEvent) -> PlaybackState {
     return sQueue.sync {
       os_log("event: %{public}@", log: log, type: .debug, e.description)
       
-      // MARK: occured while:
+      // MARK: Occured while:
       switch state {
         
       case .inactive(let fault):
@@ -491,7 +522,7 @@ public final class PlaybackSession: NSObject, Playback {
           } catch {
             return .inactive(.session)
           }
-          return playback(newEntry, shouldPlay: false)
+          return prepare(newEntry, playing: false)
           
         case .end, .error, .paused, .playing, .ready, .video,
              .toggle, .resume, .pause:
@@ -508,16 +539,19 @@ public final class PlaybackSession: NSObject, Playback {
         // MARK: paused
         switch e {
         case .change(let entry):
-          guard entry != pausedEntry else {
-            return state
+          if pausedError == nil {
+            // Giving a chance to retry with an error.
+            guard entry != pausedEntry else {
+              return state
+            }
           }
           guard let newEntry = entry else {
             return deactivate()
           }
-          return playback(newEntry, shouldPlay: false)
+          return prepare(newEntry, playing: false)
           
         case .toggle, .resume:
-          return playback(pausedEntry, shouldPlay: true)
+          return prepare(pausedEntry, playing: true)
 
         case .playing:
           guard
@@ -600,7 +634,7 @@ public final class PlaybackSession: NSObject, Playback {
           guard let newEntry = entry else {
             return deactivate()
           }
-          return playback(newEntry, shouldPlay: preparingShouldPlay)
+          return prepare(newEntry, playing: preparingShouldPlay)
           
         case .playing:
           guard
@@ -635,7 +669,7 @@ public final class PlaybackSession: NSObject, Playback {
         }
         
       case .listening(let consumingEntry), .viewing(let consumingEntry, _):
-        // MARK: listening or viewing
+        // MARK: listening/viewing
         switch e {
         case .error(let er):
           DispatchQueue.global().async {
@@ -658,7 +692,7 @@ public final class PlaybackSession: NSObject, Playback {
           guard let actualEntry = changingEntry else {
             return deactivate()
           }
-          return playback(actualEntry)
+          return prepare(actualEntry)
           
         case .toggle, .pause:
           DispatchQueue.global().async {
