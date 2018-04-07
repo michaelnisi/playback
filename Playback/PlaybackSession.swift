@@ -164,7 +164,7 @@ public final class PlaybackSession: NSObject, Playback {
 
   private func isVideo(tracks: [AVPlayerItemTrack], type: EnclosureType) -> Bool {
     let containsVideo = tracks.contains {
-      $0.assetTrack.mediaType == AVMediaType.video
+      $0.assetTrack.mediaType == .video
     }
     return containsVideo && type.isVideo
   }
@@ -461,12 +461,22 @@ public final class PlaybackSession: NSObject, Playback {
 
   /// Returns the new playback state after processing event `e` appropriately
   /// to the current state. The event handler of the state machine, where the
-  /// shit hits the fan. **Don’t block!**
+  /// shit hits the fan. **Don’t lock** yourself by trying to synchronously
+  /// trigger the next event. Event handling is serial.
   ///
   /// The playback state machine has five states: inactive, paused, preparing,
   /// listening, and viewing; where listening and viewing are incorporated.
+  /// Unlisted events for a specific state aren’t handled and result in a
+  /// **fatal error**.
   ///
   /// # inactive
+  ///
+  /// - `.inactive(Error?)`
+  ///
+  /// A Playback session starts **inactive** with an unconfigured, inactive
+  /// `AVAudioSession`, waiting for `.change(Entry?)` to start, trapping all
+  /// all other events. Being **inactive** may be unintended, so this state
+  /// optionally stores an error.
   ///
   /// ## change
   ///
@@ -476,17 +486,41 @@ public final class PlaybackSession: NSObject, Playback {
   ///
   /// # paused
   ///
+  /// - `.paused(Entry, Error?)`
+  ///
+  /// In **paused** we have an item and finished a setup cycle, leaving us
+  /// either ready to play or with an error.
+  ///
   /// ## change
   ///
   /// In **paused** state the current entry can be changed or set to `nil`
-  /// deactivating the session.
+  /// deactivating the session—leaving us in **paused** or transfering to
+  /// **inactive**.
   ///
   /// ## toggle/resume
   ///
   /// Plays the current item, eventually, after transfering to **preparing**,
   /// which will trigger `ready` or `error` events.
   ///
-  /// ...
+  /// ## playing
+  ///
+  /// Tansfers to `.listening(Entry)` or `viewing(Entry, AVPlayer`). If our
+  /// internal player is not in the required state, this will trap.
+  ///
+  /// ## ready
+  ///
+  /// After `ready` in **paused** state, we seek the player to the previous
+  /// play time of this item and pause, leaving us in **paused**, but seeked to
+  /// the correct position, ready to play.
+  ///
+  /// ### Ignored Events
+  ///
+  /// While in **paused**, `.paused`, `.video`, and `.pause` events are ignored.
+  ///
+  /// ## error
+  ///
+  /// If an `error` occures during **paused**, it will be added to the
+  /// **paused** state, in which we remain.
   ///
   /// # preparing
   ///
@@ -539,8 +573,8 @@ public final class PlaybackSession: NSObject, Playback {
         // MARK: paused
         switch e {
         case .change(let entry):
+          // Checking the error to give a chance for retrying.
           if pausedError == nil {
-            // Giving a chance to retry with an error.
             guard entry != pausedEntry else {
               return state
             }
