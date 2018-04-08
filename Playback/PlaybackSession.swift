@@ -707,7 +707,7 @@ extension PlaybackSession {
 
     let session = AVAudioSession.sharedInstance()
     try session.setCategory(AVAudioSessionCategoryPlayback)
-    try session.setRouteSharingPolicy(.longForm)
+    try session.setRouteSharingPolicy(.independent)
     try session.setActive(true)
 
     addRemoteCommandTargets()
