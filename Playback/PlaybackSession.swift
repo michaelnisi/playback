@@ -11,6 +11,7 @@ import AVKit
 import FeedKit
 import Foundation
 import os.log
+import Ola
 
 let log = OSLog(subsystem: "ink.codes.playback", category: "session")
 
@@ -382,7 +383,15 @@ public final class PlaybackSession: NSObject, Playback {
       
       guard let proxiedURL = delegate?.proxy(url: url) else {
         os_log("could not prepare: unreachable: %@", log: log, url.absoluteString)
-        return event(.error(.unreachable))
+        guard let probe = Ola(host: urlString) else {
+          return .paused(entry, .unreachable)
+        }
+        switch probe.reach() {
+        case .reachable, .cellular:
+          return .paused(entry, .unreachable)
+        case .unknown:
+          return .paused(entry, .offline)
+        }
       }
       
       guard assetURL != proxiedURL else {
@@ -437,10 +446,12 @@ public final class PlaybackSession: NSObject, Playback {
         guard state == oldValue else {
           return true
         }
-        if case .paused(_, let error) = state {
+        switch state {
+        case .paused(_, let error), .inactive(let error):
           return error != nil
+        default:
+          return false
         }
-        return false
       }()
       
       guard needsUpdate else {
@@ -486,7 +497,7 @@ public final class PlaybackSession: NSObject, Playback {
           }
           return prepare(newEntry, playing: false)
           
-        case .end, .error, .paused, .playing, .ready, .video,
+        case .error, .end, .paused, .playing, .ready, .video,
              .toggle, .resume, .pause:
           os_log("""
           unhandled: {

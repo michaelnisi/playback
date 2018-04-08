@@ -21,6 +21,7 @@ public enum PlaybackError: Error {
   case session
   case surprising(Error)
   case unreachable
+  case offline
 }
 
 extension PlaybackError: Equatable {
@@ -33,7 +34,8 @@ extension PlaybackError: Equatable {
          (.media, .media),
          (.session, .session),
          (.surprising, .surprising),
-         (.unreachable, .unreachable):
+         (.unreachable, .unreachable),
+         (.offline, .offline):
       return true
     case (.unknown, _),
          (.failed, _),
@@ -41,7 +43,8 @@ extension PlaybackError: Equatable {
          (.media, _),
          (.session, _),
          (.surprising, _),
-         (.unreachable, _):
+         (.unreachable, _),
+         (.offline, _):
       return false
     }
   }
