@@ -114,12 +114,11 @@ public final class PlaybackSession: NSObject, Playback {
     return st
   }
   
-  /// Resumes playback of the current item.
-  public func seek(playing: Bool) -> PlaybackState {
+  /// Sets the playback time to previous for `entry`.
+  public func seek(_ entry: Entry, playing: Bool) -> PlaybackState {
     return DispatchQueue.global().sync {
       guard
         let player = self.player,
-        let entry = self.currentEntry,
         let enclosure = entry.enclosure,
         let tracks = player.currentItem?.tracks else {
         fatalError("requirements to seek and play not met")
@@ -383,6 +382,13 @@ public final class PlaybackSession: NSObject, Playback {
       
       guard let proxiedURL = delegate?.proxy(url: url) else {
         os_log("could not prepare: unreachable: %@", log: log, url.absoluteString)
+        
+        DispatchQueue.global().async {
+          self.player?.pause()
+        }
+        
+        // TODO: Leave probing to users, so they can apply callbacks
+        
         guard let probe = Ola(host: urlString) else {
           return .paused(entry, .unreachable)
         }
@@ -395,7 +401,7 @@ public final class PlaybackSession: NSObject, Playback {
       }
       
       guard assetURL != proxiedURL else {
-        return seek(playing: playing)
+        return seek(entry, playing: playing)
       }
       
       player = makeAVPlayer(url: proxiedURL)
@@ -540,7 +546,7 @@ public final class PlaybackSession: NSObject, Playback {
           }
           
         case .ready:
-          return seek(playing: false)
+          return seek(pausedEntry, playing: false)
           
         case .paused, .video, .pause:
           os_log("""
@@ -598,7 +604,7 @@ public final class PlaybackSession: NSObject, Playback {
           return .paused(preparingEntry, nil)
           
         case .ready:
-          return seek(playing: preparingShouldPlay)
+          return seek(preparingEntry, playing: preparingShouldPlay)
           
         case .change(let entry):
           guard entry != preparingEntry else {
