@@ -42,7 +42,6 @@ public final class PlaybackSession: NSObject, Playback {
   public init(times: Times) {
     self.times = times
     super.init()
-//    try! activate()
   }
 
   public var delegate: PlaybackDelegate?
@@ -107,7 +106,9 @@ public final class PlaybackSession: NSObject, Playback {
     let t = time(for: url)
 
     guard let st = seekableTime(t, within: seekableTimeRanges) else {
-      let r = seekableTimeRanges.first as! CMTimeRange
+      guard let r = seekableTimeRanges.first as? CMTimeRange else {
+        return nil
+      }
       return r.start
     }
 
@@ -401,10 +402,13 @@ public final class PlaybackSession: NSObject, Playback {
       }
 
       guard assetURL != proxiedURL else {
+        assert(player?.status == .readyToPlay)
         return seek(entry, playing: playing)
       }
 
-      player = makeAVPlayer(url: proxiedURL)
+      DispatchQueue.main.async {
+        self.player = self.makeAVPlayer(url: proxiedURL)
+      }
 
       return .preparing(entry, playing)
     }
@@ -660,6 +664,8 @@ public final class PlaybackSession: NSObject, Playback {
           return PlaybackState(paused: consumingEntry, error: itemError)
 
         case .paused, .end:
+          assert(player?.error == nil)
+          assert(player?.currentItem?.error == nil)
           setCurrentTime()
           return .paused(consumingEntry, nil)
 
