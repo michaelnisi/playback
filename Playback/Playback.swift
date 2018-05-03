@@ -78,9 +78,11 @@ public protocol PlaybackDelegate {
 /// Additionally, implementors should persist play times across devices.
 public protocol Playing {
   
-  /// The currently playing item. Changing this sets up a new player item and
-  /// pauses it. Use `resume` to actually start playing.
-  var currentEntry: Entry? { get set }
+  /// The currently playing item.
+  var currentEntry: Entry? { get }
+  
+  /// Sets the current entry. Use `resume` to actually start playing.
+  func setCurrentEntry(_ newValue: Entry?)
   
   /// Resumes playing the current item from its previous position.
   @discardableResult

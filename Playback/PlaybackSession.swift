@@ -117,50 +117,48 @@ public final class PlaybackSession: NSObject, Playback {
 
   /// Sets the playback time to previous for `entry`.
   public func seek(_ entry: Entry, playing: Bool) -> PlaybackState {
-    return DispatchQueue.global().sync {
-      guard
-        let player = self.player,
-        let enclosure = entry.enclosure,
-        let tracks = player.currentItem?.tracks else {
+    guard
+      let player = self.player,
+      let enclosure = entry.enclosure,
+      let tracks = player.currentItem?.tracks else {
         fatalError("requirements to seek and play not met")
+    }
+    
+    guard player.rate != 1, !tracks.isEmpty else {
+      return state
+    }
+    
+    let newState: PlaybackState = {
+      guard playing else {
+        return .paused(entry, nil)
       }
-
-      guard player.rate != 1, !tracks.isEmpty else {
-        return state
+      return isVideo(tracks: tracks, type: enclosure.type)
+        ? .viewing(entry, player)
+        : .listening(entry)
+    }()
+    
+    guard let time = startTime(item: player.currentItem, url: enclosure.url) else {
+      if playing {
+        player.play()
       }
-
-      let newState: PlaybackState = {
-        guard playing else {
-          return .paused(entry, nil)
-        }
-        return isVideo(tracks: tracks, type: enclosure.type)
-          ? .viewing(entry, player)
-          : .listening(entry)
-      }()
-
-      guard let time = startTime(item: player.currentItem, url: enclosure.url) else {
+      return newState
+    }
+    
+    player.currentItem?.cancelPendingSeeks()
+    
+    player.seek(to: time) { finished in
+      guard finished else {
+        return
+      }
+      DispatchQueue.main.async {
         if playing {
           player.play()
         }
-        return newState
+        NowPlaying.set(entry: entry, player: player)
       }
-
-      player.currentItem?.cancelPendingSeeks()
-
-      player.seek(to: time) { finished in
-        guard finished else {
-          return
-        }
-        DispatchQueue.main.async {
-          if playing {
-            player.play()
-          }
-          NowPlaying.set(entry: entry, player: player)
-        }
-      }
-
-      return newState
     }
+    
+    return newState
   }
 
   private func isVideo(tracks: [AVPlayerItemTrack], type: EnclosureType) -> Bool {
@@ -373,45 +371,43 @@ public final class PlaybackSession: NSObject, Playback {
   }
 
   private func prepare(_ entry: Entry, playing: Bool = true) -> PlaybackState {
-    return DispatchQueue.global().sync {
-      guard
-        let urlString = entry.enclosure?.url,
-        let url = URL(string: urlString) else
-      {
-        fatalError("unhandled error: invalid enclosure: \(entry)")
-      }
-
-      guard let proxiedURL = delegate?.proxy(url: url) else {
-        os_log("could not prepare: unreachable: %@", log: log, url.absoluteString)
-
-        DispatchQueue.global().async {
-          self.player?.pause()
-        }
-
-        // TODO: Leave probing to users, so they can apply callbacks
-
-        guard let probe = Ola(host: urlString) else {
-          return .paused(entry, .unreachable)
-        }
-        switch probe.reach() {
-        case .reachable, .cellular:
-          return .paused(entry, .unreachable)
-        case .unknown:
-          return .paused(entry, .offline)
-        }
-      }
-
-      guard assetURL != proxiedURL else {
-        assert(player?.status == .readyToPlay)
-        return seek(entry, playing: playing)
-      }
-
-      DispatchQueue.main.async {
-        self.player = self.makeAVPlayer(url: proxiedURL)
-      }
-
-      return .preparing(entry, playing)
+    guard
+      let urlString = entry.enclosure?.url,
+      let url = URL(string: urlString) else
+    {
+      fatalError("unhandled error: invalid enclosure: \(entry)")
     }
+    
+    guard let proxiedURL = delegate?.proxy(url: url) else {
+      os_log("could not prepare: unreachable: %@", log: log, url.absoluteString)
+      
+      DispatchQueue.global().async {
+        self.player?.pause()
+      }
+      
+      // TODO: Leave probing to users, so they can apply callbacks
+      
+      guard let probe = Ola(host: urlString) else {
+        return .paused(entry, .unreachable)
+      }
+      switch probe.reach() {
+      case .reachable, .cellular:
+        return .paused(entry, .unreachable)
+      case .unknown:
+        return .paused(entry, .offline)
+      }
+    }
+    
+    guard assetURL != proxiedURL else {
+      assert(player?.status == .readyToPlay)
+      return seek(entry, playing: playing)
+    }
+    
+    DispatchQueue.main.async {
+      self.player = self.makeAVPlayer(url: proxiedURL)
+    }
+    
+    return .preparing(entry, playing)
   }
 
   // MARK: - FSM
@@ -715,7 +711,7 @@ public final class PlaybackSession: NSObject, Playback {
 extension PlaybackSession {
 
   private func activate() throws {
-    os_log("activate", log: log)
+    os_log("activating", log: log)
 
     let session = AVAudioSession.sharedInstance()
     try session.setCategory(AVAudioSessionCategoryPlayback)
@@ -725,15 +721,14 @@ extension PlaybackSession {
   }
 
   private func deactivate() -> PlaybackState {
-    return DispatchQueue.global().sync {
-      os_log("deactivate", log: log)
-      do {
-        try AVAudioSession.sharedInstance().setActive(false)
-      } catch {
-        return .inactive(.session)
-      }
-      return .inactive(nil)
+    os_log("deactivatiing", log: log)
+    
+    do {
+      try AVAudioSession.sharedInstance().setActive(false)
+    } catch {
+      return .inactive(.session)
     }
+    return .inactive(nil)
   }
 
   public func reclaim() {
@@ -747,30 +742,27 @@ extension PlaybackSession {
 extension PlaybackSession: Playing {
 
   public var currentEntry: Entry? {
-    get {
-      switch state {
-      case .preparing(let entry, _),
-           .listening(let entry),
-           .viewing(let entry, _),
-           .paused(let entry, _):
-        return entry
-      case .inactive:
-        return nil
-      }
+    switch state {
+    case .preparing(let entry, _),
+         .listening(let entry),
+         .viewing(let entry, _),
+         .paused(let entry, _):
+      return entry
+    case .inactive:
+      return nil
     }
-
-    set {
-      guard newValue != currentEntry else {
-        return
-      }
-
-      if let entry = newValue {
-        assert(entry.enclosure != nil, "URL required")
-      }
-
-      state = event(.change(newValue))
+  }
+  
+  public func setCurrentEntry(_ newValue: Entry?) {
+    guard newValue != currentEntry else {
+      return
     }
-
+    
+    if let entry = newValue {
+      assert(entry.enclosure != nil, "URL required")
+    }
+    
+    state = event(.change(newValue))
   }
 
   /// Synchronously checking the playback state with this function isn’t
@@ -792,7 +784,7 @@ extension PlaybackSession: Playing {
       return false
     }
 
-    currentEntry = item
+    setCurrentEntry(item)
 
     guard checkState() else {
       os_log("forward command failed", log: log, type: .error)
@@ -807,7 +799,7 @@ extension PlaybackSession: Playing {
       return false
     }
 
-    currentEntry = item
+    setCurrentEntry(item)
 
     guard checkState() else {
       os_log("backward command failed", log: log, type: .error)
