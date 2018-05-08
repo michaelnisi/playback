@@ -48,8 +48,6 @@ public final class PlaybackSession: NSObject, Playback {
 
   // MARK: Internals
 
-  var remoteCommandTargets: RemoteCommandTargets?
-
   /// The current player.
   private var player: AVPlayer?
 
@@ -480,7 +478,7 @@ public final class PlaybackSession: NSObject, Playback {
     return sQueue.sync {
       os_log("event: %{public}@", log: log, type: .debug, e.description)
 
-      // MARK: Occured while:
+      // MARK: ...occured while:
       switch state {
 
       case .inactive(let fault):
