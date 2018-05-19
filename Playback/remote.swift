@@ -21,7 +21,11 @@ extension PlaybackSession: RemoteCommandProxying {
   // MARK: - Media Player Remote Command Handlers
   
   func status(_ ok: Bool) -> MPRemoteCommandHandlerStatus {
-    os_log("last remote command status: %i", log: log, type: .debug, ok)
+    if ok {
+      os_log("remote command: OK", log: log, type: .debug)
+    } else {
+      os_log("remote command failed", log: log, type: .error)
+    }
     return ok ? MPRemoteCommandHandlerStatus.success :
       MPRemoteCommandHandlerStatus.commandFailed
   }
@@ -60,13 +64,18 @@ extension PlaybackSession: RemoteCommandProxying {
   func addRemoteCommandTargets() {
     os_log("adding remote commands", log: log)
     
-    let rcc = MPRemoteCommandCenter.shared()
+    DispatchQueue.main.async {
+      dispatchPrecondition(condition: .onQueue(DispatchQueue.main))
 
-    rcc.pauseCommand.addTarget(handler: onPause)
-    rcc.playCommand.addTarget(handler: onPlay)
-    rcc.togglePlayPauseCommand.addTarget(handler: onToggle)
-    rcc.nextTrackCommand.addTarget(handler: onNextTrack)
-    rcc.previousTrackCommand.addTarget(handler: onPreviousTrack)
+      let rcc = MPRemoteCommandCenter.shared()
+      
+      rcc.pauseCommand.addTarget(handler: self.onPause)
+      rcc.playCommand.addTarget(handler: self.onPlay)
+      rcc.togglePlayPauseCommand.addTarget(handler: self.onToggle)
+      rcc.nextTrackCommand.addTarget(handler: self.onNextTrack)
+      rcc.previousTrackCommand.addTarget(handler: self.onPreviousTrack)
+    }
+
   }
   
 //  func removeRemoteCommandTargets() {
