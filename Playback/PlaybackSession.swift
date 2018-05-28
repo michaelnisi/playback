@@ -14,6 +14,7 @@ import os.log
 import Ola
 
 let log = OSLog(subsystem: "ink.codes.playback", category: "session")
+let worker = DispatchQueue(label: "ink.codes.playback.worker")
 
 /// Persists play times.
 public protocol Times {
@@ -178,7 +179,7 @@ public final class PlaybackSession: NSObject, Playback {
         return
     }
 
-    state = event(.video)
+    event(.video)
   }
 
   private func onStatusChange(_ change: [NSKeyValueChangeKey : Any]?) {
@@ -193,12 +194,12 @@ public final class PlaybackSession: NSObject, Playback {
 
     switch status {
     case .readyToPlay:
-      state = event(.ready)
+      event(.ready)
     case .failed:
-      state = event(.error(.failed))
+      event(.error(.failed))
     case .unknown:
       // TODO: Is this even an error?
-      state = event(.error(.unknown))
+      event(.error(.unknown))
     }
   }
 
@@ -236,9 +237,9 @@ public final class PlaybackSession: NSObject, Playback {
 
       switch status {
       case .paused:
-        state = event(.paused)
+        event(.paused)
       case .playing:
-        state = event(.playing)
+        event(.playing)
       case .waitingToPlayAtSpecifiedRate:
         break
       }
@@ -270,11 +271,11 @@ public final class PlaybackSession: NSObject, Playback {
   }
 
   @objc func onItemDidPlayToEndTime() {
-    state = event(.end)
+    event(.end)
   }
 
   @objc func onItemNewErrorLogEntry() {
-    state = event(.error(.log))
+    event(.error(.log))
   }
 
   private func freshAsset(url: URL) -> AVURLAsset {
@@ -371,28 +372,32 @@ public final class PlaybackSession: NSObject, Playback {
   private func prepare(_ entry: Entry, playing: Bool = true) -> PlaybackState {
     guard
       let urlString = entry.enclosure?.url,
-      let url = URL(string: urlString) else
-    {
+      let url = URL(string: urlString) else {
       fatalError("unhandled error: invalid enclosure: \(entry)")
     }
     
     guard let proxiedURL = delegate?.proxy(url: url) else {
       os_log("could not prepare: unreachable: %@", log: log, url.absoluteString)
       
-      DispatchQueue.global().async {
-        self.player?.pause()
-      }
+      // TODO: Remove and handle event correctly, including pausing AVPlayer
+      // Pausing the AVPlayer after returning.
+      DispatchQueue.global().async { [weak player] in player?.pause() }
       
-      // TODO: Leave probing to users, so they can apply callbacks
-      
-      guard let probe = Ola(host: urlString) else {
+      return .paused(entry, .unreachable)
+    }
+    
+    if !proxiedURL.isFileURL,
+      let host = proxiedURL.host,
+      let status = Ola(host: host)?.reach() {
+      if case .unknown = status {
+        os_log("could not prepare: unreachable: %@", log: log, proxiedURL.absoluteString)
+        let player = self.player
+        
+        // TODO: Remove and handle event correctly, including pausing AVPlayer
+        // Pausing the AVPlayer after returning.
+        DispatchQueue.global().async { [weak player] in player?.pause() }
+        
         return .paused(entry, .unreachable)
-      }
-      switch probe.reach() {
-      case .reachable, .cellular:
-        return .paused(entry, .unreachable)
-      case .unknown:
-        return .paused(entry, .offline)
       }
     }
     
@@ -401,9 +406,7 @@ public final class PlaybackSession: NSObject, Playback {
       return seek(entry, playing: playing)
     }
     
-    DispatchQueue.main.async {
-      self.player = self.makeAVPlayer(url: proxiedURL)
-    }
+    player = makeAVPlayer(url: proxiedURL)
     
     return .preparing(entry, playing)
   }
@@ -474,8 +477,8 @@ public final class PlaybackSession: NSObject, Playback {
 
   }
 
-  private func event(_ e: PlaybackEvent) -> PlaybackState {
-    return sQueue.sync {
+  private func event(_ e: PlaybackEvent) {
+    sQueue.sync {
       os_log("event: %{public}@", log: log, type: .debug, e.description)
 
       // MARK: ...occured while:
@@ -492,14 +495,14 @@ public final class PlaybackSession: NSObject, Playback {
         switch e {
         case .change(let entry):
           guard let newEntry = entry else {
-            return deactivate()
+            return state = deactivate()
           }
           do {
             try activate()
           } catch {
-            return .inactive(.session)
+            return state = .inactive(.session)
           }
-          return prepare(newEntry, playing: false)
+          return state = prepare(newEntry, playing: false)
 
         case .error, .end, .paused, .playing, .ready, .video,
              .toggle, .resume, .pause:
@@ -519,16 +522,16 @@ public final class PlaybackSession: NSObject, Playback {
           // Checking the error to give a chance for retrying.
           if pausedError == nil {
             guard entry != pausedEntry else {
-              return state
+              return
             }
           }
           guard let newEntry = entry else {
-            return deactivate()
+            return state = deactivate()
           }
-          return prepare(newEntry, playing: false)
+          return state = prepare(newEntry, playing: false)
 
         case .toggle, .resume:
-          return prepare(pausedEntry, playing: true)
+          return state = prepare(pausedEntry, playing: true)
 
         case .playing:
           guard
@@ -538,13 +541,13 @@ public final class PlaybackSession: NSObject, Playback {
             fatalError("impossible")
           }
           if isVideo(tracks: tracks, type: type) {
-            return .viewing(pausedEntry, player)
+            return state = .viewing(pausedEntry, player)
           } else {
-            return .listening(pausedEntry)
+            return state = .listening(pausedEntry)
           }
 
         case .ready:
-          return seek(pausedEntry, playing: false)
+          return state = seek(pausedEntry, playing: false)
 
         case .paused, .video, .pause:
           os_log("""
@@ -553,7 +556,7 @@ public final class PlaybackSession: NSObject, Playback {
             while: %{public}@
           }
           """, log: log, type: .debug, e.description, state.description)
-          return state
+          return
 
         case .error(let er):
           DispatchQueue.global().async {
@@ -562,7 +565,7 @@ public final class PlaybackSession: NSObject, Playback {
           let itemError = self.player?.currentItem?.error ?? er
           os_log("error while paused: %{public}@", log: log, type: .error,
                  itemError as CVarArg)
-          return PlaybackState(paused: pausedEntry, error: itemError)
+          return state = PlaybackState(paused: pausedEntry, error: itemError)
 
         case .end:
           os_log("""
@@ -584,34 +587,34 @@ public final class PlaybackSession: NSObject, Playback {
           let itemError = self.player?.currentItem?.error ?? er
           os_log("error while preparing: %{public}@", log: log, type: .error,
                  itemError as CVarArg)
-          return PlaybackState(paused: preparingEntry, error: itemError)
+          return state = PlaybackState(paused: preparingEntry, error: itemError)
 
         case .resume:
-          return .preparing(preparingEntry, true)
+          return state = .preparing(preparingEntry, true)
 
         case .pause:
           DispatchQueue.global().async {
             self.player?.pause()
           }
-          return state
+          return
 
         case .toggle:
-          return .preparing(preparingEntry, !preparingShouldPlay)
+          return state = .preparing(preparingEntry, !preparingShouldPlay)
 
         case .paused:
-          return .paused(preparingEntry, nil)
+          return state = .paused(preparingEntry, nil)
 
         case .ready:
-          return seek(preparingEntry, playing: preparingShouldPlay)
+          return state = seek(preparingEntry, playing: preparingShouldPlay)
 
         case .change(let entry):
           guard entry != preparingEntry else {
-            return state
+            return
           }
           guard let newEntry = entry else {
-            return deactivate()
+            return state = deactivate()
           }
-          return prepare(newEntry, playing: preparingShouldPlay)
+          return state = prepare(newEntry, playing: preparingShouldPlay)
 
         case .playing:
           guard
@@ -621,9 +624,9 @@ public final class PlaybackSession: NSObject, Playback {
             fatalError("impossible")
           }
           if isVideo(tracks: tracks, type: type) {
-            return .viewing(preparingEntry, player)
+            return state = .viewing(preparingEntry, player)
           } else {
-            return .listening(preparingEntry)
+            return state = .listening(preparingEntry)
           }
 
         case .video:
@@ -633,7 +636,7 @@ public final class PlaybackSession: NSObject, Playback {
             while: %{public}@
           }
           """, log: log, type: .debug, e.description, state.description)
-          return state
+          return
 
         case .end:
           os_log("""
@@ -655,29 +658,29 @@ public final class PlaybackSession: NSObject, Playback {
           let itemError = self.player?.currentItem?.error ?? er
           os_log("error while listening or viewing: %{public}@",
                  log: log, type: .error, itemError as CVarArg)
-          return PlaybackState(paused: consumingEntry, error: itemError)
+          return state = PlaybackState(paused: consumingEntry, error: itemError)
 
         case .paused, .end:
           assert(player?.error == nil)
           assert(player?.currentItem?.error == nil)
           setCurrentTime()
-          return .paused(consumingEntry, nil)
+          return state = .paused(consumingEntry, nil)
 
         case .change(let changingEntry):
           guard changingEntry != consumingEntry else {
-            return state
+            return
           }
           setCurrentTime()
           guard let actualEntry = changingEntry else {
-            return deactivate()
+            return state = deactivate()
           }
-          return prepare(actualEntry)
+          return state = prepare(actualEntry)
 
         case .toggle, .pause:
           DispatchQueue.global().async {
             self.player?.pause()
           }
-          return state
+          return
 
         case .ready, .playing, .resume:
           os_log("""
@@ -686,7 +689,7 @@ public final class PlaybackSession: NSObject, Playback {
             while: %{public}@
           }
           """, log: log, type: .debug, e.description, state.description)
-          return state
+          return
 
         case .video:
           os_log("""
@@ -752,15 +755,17 @@ extension PlaybackSession: Playing {
   }
   
   public func setCurrentEntry(_ newValue: Entry?) {
-    guard newValue != currentEntry else {
-      return
+    worker.async {
+      guard newValue != self.currentEntry else {
+        return
+      }
+      
+      if let entry = newValue {
+        assert(entry.enclosure != nil, "URL required")
+      }
+      
+      self.event(.change(newValue))
     }
-    
-    if let entry = newValue {
-      assert(entry.enclosure != nil, "URL required")
-    }
-    
-    state = event(.change(newValue))
   }
 
   /// Synchronously checking the playback state with this function isn’t
@@ -776,32 +781,41 @@ extension PlaybackSession: Playing {
       return false
     }
   }
+  
+  // TODO: Review API
+  //
+  // As the returns of these APIs, initially meant for remote command blocks,
+  // are all statically returning true, these have to thought over.
 
   public func forward() -> Bool {
-    guard let item = delegate?.nextItem() else {
-      return false
+    worker.async {
+      guard let item = self.delegate?.nextItem() else {
+        return
+      }
+      
+      self.setCurrentEntry(item)
+      
+      guard self.checkState() else {
+        os_log("forward command failed", log: log, type: .error)
+        return
+      }
     }
-
-    setCurrentEntry(item)
-
-    guard checkState() else {
-      os_log("forward command failed", log: log, type: .error)
-      return false
-    }
-
+    
     return true
   }
 
   public func backward() -> Bool {
-    guard let item = delegate?.previousItem() else {
-      return false
-    }
-
-    setCurrentEntry(item)
-
-    guard checkState() else {
-      os_log("backward command failed", log: log, type: .error)
-      return false
+    worker.async {
+      guard let item = self.delegate?.previousItem() else {
+        return
+      }
+      
+      self.setCurrentEntry(item)
+      
+      guard self.checkState() else {
+        os_log("backward command failed", log: log, type: .error)
+        return
+      }
     }
 
     return true
@@ -809,23 +823,27 @@ extension PlaybackSession: Playing {
 
   @discardableResult
   public func resume() -> Bool {
-    state = event(.resume)
-
-    guard checkState() else {
-      os_log("resume command failed", log: log, type: .error)
-      return false
+    worker.async {
+      self.event(.resume)
+      
+      guard self.checkState() else {
+        os_log("resume command failed", log: log, type: .error)
+        return
+      }
     }
-
+    
     return true
   }
 
   @discardableResult
   public func pause() -> Bool {
-    state = event(.pause)
-
-    guard checkState() else {
-      os_log("pause command failed", log: log, type: .error)
-      return false
+    worker.async {
+      self.event(.pause)
+      
+      guard self.checkState() else {
+        os_log("pause command failed", log: log, type: .error)
+        return
+      }
     }
 
     return true
@@ -833,11 +851,13 @@ extension PlaybackSession: Playing {
 
   @discardableResult
   public func toggle() -> Bool {
-    state = event(.toggle)
-
-    guard checkState() else {
-      os_log("toggle command failed", log: log, type: .error)
-      return false
+    worker.async {
+      self.event(.toggle)
+      
+      guard self.checkState() else {
+        os_log("toggle command failed", log: log, type: .error)
+        return
+      }
     }
 
     return true
