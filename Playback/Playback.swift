@@ -12,6 +12,8 @@ import Foundation
 import os.log
 import FeedKit
 
+// TODO: Remove offline
+
 /// Enumerates playback errors.
 public enum PlaybackError: Error {
   case unknown
@@ -21,7 +23,6 @@ public enum PlaybackError: Error {
   case session
   case surprising(Error)
   case unreachable
-  case offline
 }
 
 extension PlaybackError: Equatable {
@@ -34,8 +35,7 @@ extension PlaybackError: Equatable {
          (.media, .media),
          (.session, .session),
          (.surprising, .surprising),
-         (.unreachable, .unreachable),
-         (.offline, .offline):
+         (.unreachable, .unreachable):
       return true
     case (.unknown, _),
          (.failed, _),
@@ -43,8 +43,7 @@ extension PlaybackError: Equatable {
          (.media, _),
          (.session, _),
          (.surprising, _),
-         (.unreachable, _),
-         (.offline, _):
+         (.unreachable, _):
       return false
     }
   }
@@ -56,7 +55,8 @@ extension PlaybackError: Equatable {
 public protocol PlaybackDelegate {
   
   /// Returns a local or remote URL for `url`. One might return `nil` to signal
-  /// that the URL is not reachable.
+  /// that the URL is not reachable, implying that the returned URL must be
+  /// reachable on the current network, otherwise return `nil`.
   func proxy(url: URL) -> URL?
   
   /// Called when this session’s playback `state` changed.

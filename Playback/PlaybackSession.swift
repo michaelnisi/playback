@@ -386,20 +386,22 @@ public final class PlaybackSession: NSObject, Playback {
       return .paused(entry, .unreachable)
     }
     
-    if !proxiedURL.isFileURL,
-      let host = proxiedURL.host,
-      let status = Ola(host: host)?.reach() {
-      if case .unknown = status {
-        os_log("could not prepare: unreachable: %@", log: log, proxiedURL.absoluteString)
-        let player = self.player
-        
-        // TODO: Remove and handle event correctly, including pausing AVPlayer
-        // Pausing the AVPlayer after returning.
-        DispatchQueue.global().async { [weak player] in player?.pause() }
-        
-        return .paused(entry, .unreachable)
-      }
-    }
+    // TODO: Remove redundant reachability check
+    
+//    if !proxiedURL.isFileURL,
+//      let host = proxiedURL.host,
+//      let status = Ola(host: host)?.reach() {
+//      if case .unknown = status {
+//        os_log("could not prepare: unreachable: %@", log: log, proxiedURL.absoluteString)
+//        let player = self.player
+//
+//        // TODO: Remove and handle event correctly, including pausing AVPlayer
+//        // Pausing the AVPlayer after returning.
+//        DispatchQueue.global().async { [weak player] in player?.pause() }
+//
+//        return .paused(entry, .unreachable)
+//      }
+//    }
     
     guard assetURL != proxiedURL else {
       assert(player?.status == .readyToPlay)
