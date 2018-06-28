@@ -362,9 +362,7 @@ public final class PlaybackSession: NSObject, Playback {
                           options: [.old, .new],
                           context: &playerContext)
 
-    if let oldPlayer = self.player {
-      oldPlayer.removeObserver(self, forKeyPath: keyPath, context: &playerContext)
-    }
+    player?.removeObserver(self, forKeyPath: keyPath, context: &playerContext)
 
     return newPlayer
   }
@@ -378,30 +376,9 @@ public final class PlaybackSession: NSObject, Playback {
     
     guard let proxiedURL = delegate?.proxy(url: url) else {
       os_log("could not prepare: unreachable: %@", log: log, url.absoluteString)
-      
-      // TODO: Remove and handle event correctly, including pausing AVPlayer
-      // Pausing the AVPlayer after returning.
-      DispatchQueue.global().async { [weak player] in player?.pause() }
-      
+      pausePlayer()
       return .paused(entry, .unreachable)
     }
-    
-    // TODO: Remove redundant reachability check
-    
-//    if !proxiedURL.isFileURL,
-//      let host = proxiedURL.host,
-//      let status = Ola(host: host)?.reach() {
-//      if case .unknown = status {
-//        os_log("could not prepare: unreachable: %@", log: log, proxiedURL.absoluteString)
-//        let player = self.player
-//
-//        // TODO: Remove and handle event correctly, including pausing AVPlayer
-//        // Pausing the AVPlayer after returning.
-//        DispatchQueue.global().async { [weak player] in player?.pause() }
-//
-//        return .paused(entry, .unreachable)
-//      }
-//    }
     
     guard assetURL != proxiedURL else {
       assert(player?.status == .readyToPlay)
@@ -477,6 +454,13 @@ public final class PlaybackSession: NSObject, Playback {
       }
     }
 
+  }
+  
+  /// Submits a block pausing our player on the main queue.
+  private func pausePlayer() {
+    DispatchQueue.main.async {
+      self.player?.pause()
+    }
   }
 
   private func event(_ e: PlaybackEvent) {
@@ -561,9 +545,7 @@ public final class PlaybackSession: NSObject, Playback {
           return
 
         case .error(let er):
-          DispatchQueue.global().async {
-            self.player?.pause()
-          }
+          pausePlayer()
           let itemError = self.player?.currentItem?.error ?? er
           os_log("error while paused: %{public}@", log: log, type: .error,
                  itemError as CVarArg)
@@ -583,9 +565,7 @@ public final class PlaybackSession: NSObject, Playback {
         // MARK: preparing
         switch e {
         case .error(let er):
-          DispatchQueue.global().async {
-            self.player?.pause()
-          }
+          pausePlayer()
           let itemError = self.player?.currentItem?.error ?? er
           os_log("error while preparing: %{public}@", log: log, type: .error,
                  itemError as CVarArg)
@@ -595,10 +575,7 @@ public final class PlaybackSession: NSObject, Playback {
           return state = .preparing(preparingEntry, true)
 
         case .pause:
-          DispatchQueue.global().async {
-            self.player?.pause()
-          }
-          return
+          return pausePlayer()
 
         case .toggle:
           return state = .preparing(preparingEntry, !preparingShouldPlay)
@@ -654,9 +631,8 @@ public final class PlaybackSession: NSObject, Playback {
         // MARK: listening/viewing
         switch e {
         case .error(let er):
-          DispatchQueue.global().async {
-            self.player?.pause()
-          }
+          pausePlayer()
+          
           let itemError = self.player?.currentItem?.error ?? er
           os_log("error while listening or viewing: %{public}@",
                  log: log, type: .error, itemError as CVarArg)
@@ -679,10 +655,7 @@ public final class PlaybackSession: NSObject, Playback {
           return state = prepare(actualEntry)
 
         case .toggle, .pause:
-          DispatchQueue.global().async {
-            self.player?.pause()
-          }
-          return
+          return pausePlayer()
 
         case .ready, .playing, .resume:
           os_log("""
