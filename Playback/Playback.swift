@@ -53,6 +53,8 @@ extension PlaybackError: Equatable {
 /// A callback interface implemented by playback users to receive information
 /// about the playback session state.
 public protocol PlaybackDelegate {
+
+  // TODO: Consider replacing Optional with throwing for more details
   
   /// Returns a local or remote URL for `url`. One might return `nil` to signal
   /// that the URL is not reachable, implying that the returned URL must be
