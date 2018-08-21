@@ -13,7 +13,8 @@ import Foundation
 import os.log
 import Ola
 
-let log = OSLog(subsystem: "ink.codes.playback", category: "session")
+let log = OSLog.disabled
+
 let worker = DispatchQueue(label: "ink.codes.playback.worker")
 
 /// Persists play times.
