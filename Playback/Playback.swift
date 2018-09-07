@@ -12,8 +12,6 @@ import Foundation
 import os.log
 import FeedKit
 
-// TODO: Remove offline
-
 /// Enumerates playback errors.
 public enum PlaybackError: Error {
   case unknown

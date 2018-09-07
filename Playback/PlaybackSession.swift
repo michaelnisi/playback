@@ -13,9 +13,7 @@ import Foundation
 import os.log
 import Ola
 
-let log = OSLog.disabled
-
-let worker = DispatchQueue(label: "ink.codes.playback.worker")
+let log = OSLog.init(subsystem: "ink.codes.playback", category: "av")
 
 /// Persists play times.
 public protocol Times {
@@ -32,8 +30,7 @@ struct RemoteCommandTargets {
   let previousTrack: Any?
 }
 
-/// Implements `Playback` as
-/// [Finite-state machine](https://en.wikipedia.org/wiki/Finite-state_machine).
+/// Implements `Playback` as FSM using worker and a serial queue.
 public final class PlaybackSession: NSObject, Playback {
 
   private let times: Times
@@ -41,6 +38,9 @@ public final class PlaybackSession: NSObject, Playback {
   // Internal serial queue.
   private let sQueue = DispatchQueue(label: "ink.codes.playback.serial")
 
+  /// Makes a new playback session.
+  ///
+  /// - Parameter times: A repository for storing times (per URL).
   public init(times: Times) {
     self.times = times
     super.init()
@@ -55,15 +55,14 @@ public final class PlaybackSession: NSObject, Playback {
 
   /// The URL of the currently playing asset.
   private var assetURL: URL? {
-    get {
-      guard let asset = player?.currentItem?.asset as? AVURLAsset else {
-        return nil
-      }
-      return asset.url
+    guard let asset = player?.currentItem?.asset as? AVURLAsset else {
+      return nil
     }
+
+    return asset.url
   }
 
-  private func seekableTime(
+  private static func seekableTime(
     _ time: CMTime,
     within seekableTimeRanges: [NSValue]
   ) -> CMTime? {
@@ -75,6 +74,7 @@ public final class PlaybackSession: NSObject, Playback {
       guard let tr = v as? CMTimeRange else {
         continue
       }
+
       if tr.containsTime(time) {
         return time
       }
@@ -105,7 +105,7 @@ public final class PlaybackSession: NSObject, Playback {
 
     let t = time(for: url)
 
-    guard let st = seekableTime(t, within: seekableTimeRanges) else {
+    guard let st = PlaybackSession.seekableTime(t, within: seekableTimeRanges) else {
       guard let r = seekableTimeRanges.first as? CMTimeRange else {
         return nil
       }
@@ -132,7 +132,7 @@ public final class PlaybackSession: NSObject, Playback {
       guard playing else {
         return .paused(entry, nil)
       }
-      return isVideo(tracks: tracks, type: enclosure.type)
+      return PlaybackSession.isVideo(tracks: tracks, type: enclosure.type)
         ? .viewing(entry, player)
         : .listening(entry)
     }()
@@ -161,13 +161,15 @@ public final class PlaybackSession: NSObject, Playback {
     return newState
   }
 
-  private func isVideo(tracks: [AVPlayerItemTrack], type: EnclosureType) -> Bool {
+  private static func isVideo(
+    tracks: [AVPlayerItemTrack], type: EnclosureType) -> Bool {
     let containsVideo = tracks.contains {
-      $0.assetTrack.mediaType == .video
+      $0.assetTrack?.mediaType == .video
     }
     return containsVideo && type.isVideo
   }
 
+  // The context for player item key-value observation.
   private var playerItemContext = 0
 
   private func onTracksChange(_ change: [NSKeyValueChangeKey : Any]?) {
@@ -176,7 +178,7 @@ public final class PlaybackSession: NSObject, Playback {
     }
 
     guard let enclosure = currentEntry?.enclosure,
-      isVideo(tracks: tracks, type: enclosure.type) else {
+      PlaybackSession.isVideo(tracks: tracks, type: enclosure.type) else {
         return
     }
 
@@ -184,10 +186,10 @@ public final class PlaybackSession: NSObject, Playback {
   }
 
   private func onStatusChange(_ change: [NSKeyValueChangeKey : Any]?) {
-    let status: AVPlayerItemStatus
+    let status: AVPlayerItem.Status
 
     if let newNumber = change?[.newKey] as? NSNumber,
-      let newStatus = AVPlayerItemStatus(rawValue: newNumber.intValue) {
+      let newStatus = AVPlayerItem.Status(rawValue: newNumber.intValue) {
       status = newStatus
     } else {
       status = .unknown
@@ -229,45 +231,42 @@ public final class PlaybackSession: NSObject, Playback {
   }
 
   private func onTimeControlChange(_ change: [NSKeyValueChangeKey : Any]?) {
-    if #available(iOS 10.0, *) {
-      // Direct cast to AVPlayerTimeControlStatus fails here.
-      guard let s = change?[.newKey] as? Int,
-        let status = AVPlayerTimeControlStatus(rawValue: s) else {
-          return
-      }
+    // Direct cast to AVPlayerTimeControlStatus fails here.
+    guard let s = change?[.newKey] as? Int,
+      let status = AVPlayer.TimeControlStatus(rawValue: s) else {
+        return
+    }
 
-      switch status {
-      case .paused:
-        event(.paused)
-      case .playing:
-        event(.playing)
-      case .waitingToPlayAtSpecifiedRate:
-        break
-      }
+    os_log("handling time control change: errors: %@", log: log, type: .debug, player?.currentItem?.errorLog() ?? "no error log")
+
+    switch status {
+    case .paused:
+      event(.paused)
+    case .playing:
+      event(.playing)
+    case .waitingToPlayAtSpecifiedRate:
+      break
     }
   }
 
-  override public func observeValue(forKeyPath keyPath: String?,
-                                    of object: Any?,
-                                    change: [NSKeyValueChangeKey : Any]?,
-                                    context: UnsafeMutableRawPointer?) {
-
-    guard context == &playerItemContext || context == &playerContext else {
-      super.observeValue(forKeyPath: keyPath,
-                         of: object,
-                         change: change,
-                         context: context)
-      return
-    }
-
-    if keyPath == #keyPath(AVPlayerItem.tracks) {
+  override public func observeValue(
+    forKeyPath keyPath: String?,
+    of object: Any?,
+    change: [NSKeyValueChangeKey : Any]?,
+    context: UnsafeMutableRawPointer?
+  ) {
+    switch (context, keyPath) {
+    case (&playerItemContext, #keyPath(AVPlayerItem.tracks)):
       onTracksChange(change)
-    } else if keyPath == #keyPath(AVPlayerItem.status)  {
+    case (&playerItemContext, #keyPath(AVPlayerItem.status)):
       onStatusChange(change)
-    } else if keyPath == #keyPath(AVPlayerItem.duration) {
+    case (&playerItemContext, #keyPath(AVPlayerItem.duration)):
       onDurationChange(change)
-    } else if keyPath == #keyPath(AVPlayer.timeControlStatus) {
+    case (&playerContext, #keyPath(AVPlayer.timeControlStatus)):
       onTimeControlChange(change)
+    default:
+      super.observeValue(
+        forKeyPath: keyPath, of: object,change: change, context: context)
     }
   }
 
@@ -279,12 +278,7 @@ public final class PlaybackSession: NSObject, Playback {
     event(.error(.log))
   }
 
-  private func freshAsset(url: URL) -> AVURLAsset {
-    let asset = AVURLAsset(url: url)
-    return asset
-  }
-
-  private func freshItem(asset: AVURLAsset) -> AVPlayerItem {
+  private func makePlayerItem(asset: AVURLAsset) -> AVPlayerItem {
     let item = AVPlayerItem(asset: asset)
 
     let keyPaths = [
@@ -335,6 +329,7 @@ public final class PlaybackSession: NSObject, Playback {
     }
   }
 
+  // The context for player key-value observation.
   private var playerContext = 0
 
   /// Passing `nil` as `url` dismisses the current player and returns `nil`.
@@ -350,10 +345,17 @@ public final class PlaybackSession: NSObject, Playback {
       return nil
     }
 
-    let asset = freshAsset(url: url)
-    let item = freshItem(asset: asset)
+    let asset = AVURLAsset(url: url)
+    let item = makePlayerItem(asset: asset)
 
     let newPlayer = AVPlayer(playerItem: item)
+
+    // Without disallowing external playback here, the system takes our player
+    // as video player and delegates control to Apple TV, manifesting, for
+    // example, in disabling volume controls in Control Centre.
+
+    newPlayer.allowsExternalPlayback = false
+
     newPlayer.actionAtItemEnd = .pause
 
     let keyPath = #keyPath(AVPlayer.timeControlStatus)
@@ -368,6 +370,7 @@ public final class PlaybackSession: NSObject, Playback {
     return newPlayer
   }
 
+  /// Returns: `.paused`, `.preparing`, `listening` or `viewing`
   private func prepare(_ entry: Entry, playing: Bool = true) -> PlaybackState {
     guard
       let urlString = entry.enclosure?.url,
@@ -410,7 +413,7 @@ public final class PlaybackSession: NSObject, Playback {
     }
 
     if let duration = player.currentItem?.duration,
-      duration != kCMTimeIndefinite {
+      duration != CMTime.indefinite {
       let end = CMTimeSubtract(duration, threshold)
       let trailing = CMTimeCompare(t, end)
       guard trailing == -1 else {
@@ -422,7 +425,7 @@ public final class PlaybackSession: NSObject, Playback {
     times.set(t, for: url)
   }
 
-  private var state = PlaybackState.inactive(nil) {
+  private var state = PlaybackState.inactive(nil, false) {
     didSet {
       os_log("new state: %{public}@, old state: %{public}@",
              log: log, type: .debug,
@@ -433,8 +436,9 @@ public final class PlaybackSession: NSObject, Playback {
         guard state == oldValue else {
           return true
         }
+
         switch state {
-        case .paused(_, let error), .inactive(let error):
+        case .paused(_, let error), .inactive(let error, _):
           return error != nil
         default:
           return false
@@ -464,220 +468,232 @@ public final class PlaybackSession: NSObject, Playback {
     }
   }
 
+  /// ⚠️ This method is no joke, it traps if we mess up. Selected events,
+  /// however, just get logged and ignored to save the day.
+  private func updateState(_ e: PlaybackEvent) {
+    os_log("handling event: %{public}@", log: log, type: .debug, e.description)
+
+    switch state {
+    case .inactive(let fault, let resuming):
+      // MARK: inactive
+      guard fault == nil else {
+        os_log("unresolved error while inactive: %{public}@",
+               log: log, type: .error, fault! as CVarArg)
+        fatalError(String(describing: fault))
+      }
+
+      switch e {
+      case .change(let entry):
+        guard let newEntry = entry else {
+          return state = deactivate()
+        }
+        do {
+          try activate()
+        } catch {
+          return state = .inactive(.session, resuming)
+        }
+        return state = prepare(newEntry, playing: resuming)
+
+      case .resume:
+        return state = .inactive(fault, true)
+
+      case .error, .end, .paused, .playing, .ready, .video,
+           .toggle, .pause:
+        os_log("""
+          unhandled: (
+            event: %{public}@
+            while: %{public}@
+          )
+          """, log: log, type: .error, e.description, state.description)
+        fatalError(String(describing: e))
+      }
+
+    case .paused(let pausedEntry, let pausedError):
+      // MARK: paused
+      switch e {
+      case .change(let entry):
+        // Checking the error to give a chance for retrying.
+        if pausedError == nil {
+          guard entry != pausedEntry else {
+            return
+          }
+        }
+        guard let newEntry = entry else {
+          return state = deactivate()
+        }
+        return state = prepare(newEntry, playing: false)
+
+      case .toggle, .resume:
+        return state = prepare(pausedEntry, playing: true)
+
+      case .playing:
+        guard
+          let player = self.player,
+          let tracks = player.currentItem?.tracks,
+          let type = pausedEntry.enclosure?.type else {
+            fatalError("impossible")
+        }
+        if PlaybackSession.isVideo(tracks: tracks, type: type) {
+          return state = .viewing(pausedEntry, player)
+        } else {
+          return state = .listening(pausedEntry)
+        }
+
+      case .ready:
+        return state = seek(pausedEntry, playing: false)
+
+      case .paused, .video, .pause:
+        os_log("""
+          ** ignoring: (
+            event: %{public}@
+            while: %{public}@
+          )
+          """, log: log, type: .debug, e.description, state.description)
+        return
+
+      case .error(let er):
+        pausePlayer()
+        let itemError = self.player?.currentItem?.error ?? er
+        os_log("error while paused: %{public}@", log: log, type: .error,
+               itemError as CVarArg)
+        return state = PlaybackState(paused: pausedEntry, error: itemError)
+
+      case .end:
+        os_log("""
+          unhandled: (
+            event: %{public}@
+            while: %{public}@
+          )
+          """, log: log, type: .error, e.description, state.description)
+        fatalError(String(describing: e))
+      }
+
+    case .preparing(let preparingEntry, let preparingShouldPlay):
+      // MARK: preparing
+      switch e {
+      case .error(let er):
+        pausePlayer()
+        let itemError = self.player?.currentItem?.error ?? er
+        os_log("error while preparing: %{public}@", log: log, type: .error,
+               itemError as CVarArg)
+        return state = PlaybackState(paused: preparingEntry, error: itemError)
+
+      case .resume:
+        return state = .preparing(preparingEntry, true)
+
+      case .pause:
+        return pausePlayer()
+
+      case .toggle:
+        return state = .preparing(preparingEntry, !preparingShouldPlay)
+
+      case .paused:
+        return state = .paused(preparingEntry, nil)
+
+      case .ready:
+        return state = seek(preparingEntry, playing: preparingShouldPlay)
+
+      case .change(let entry):
+        guard entry != preparingEntry else {
+          return
+        }
+        guard let newEntry = entry else {
+          return state = deactivate()
+        }
+        return state = prepare(newEntry, playing: preparingShouldPlay)
+
+      case .playing:
+        guard
+          let player = self.player,
+          let tracks = player.currentItem?.tracks,
+          let type = preparingEntry.enclosure?.type else {
+            fatalError("impossible")
+        }
+
+        let isVideo = PlaybackSession.isVideo(tracks: tracks, type: type)
+
+        player.allowsExternalPlayback = isVideo
+
+        if isVideo {
+          return state = .viewing(preparingEntry, player)
+        } else {
+          return state = .listening(preparingEntry)
+        }
+
+      case .video:
+        os_log("""
+          ** ignoring: (
+            event: %{public}@
+            while: %{public}@
+          )
+          """, log: log, type: .debug, e.description, state.description)
+        return
+
+      case .end:
+        os_log("""
+          unhandled: (
+            event: %{public}@
+            while: %{public}@
+          )
+          """, log: log, type: .error, e.description, state.description)
+        fatalError(String(describing: e))
+      }
+
+    case .listening(let playingEntry), .viewing(let playingEntry, _):
+      // MARK: listening/viewing
+      switch e {
+      case .error(let er):
+        pausePlayer()
+
+        let itemError = self.player?.currentItem?.error ?? er
+        os_log("error while listening or viewing: %{public}@",
+               log: log, type: .error, itemError as CVarArg)
+        return state = PlaybackState(paused: playingEntry, error: itemError)
+
+      case .paused, .end:
+        assert(player?.error == nil)
+        assert(player?.currentItem?.error == nil)
+        setCurrentTime()
+        return state = .paused(playingEntry, nil)
+
+      case .change(let changingEntry):
+        guard changingEntry != playingEntry else {
+          return
+        }
+        setCurrentTime()
+        guard let actualEntry = changingEntry else {
+          return state = deactivate()
+        }
+        return state = prepare(actualEntry)
+
+      case .toggle, .pause:
+        return pausePlayer()
+
+      case .ready, .playing, .resume:
+        os_log("""
+          ignoring: (
+            event: %{public}@
+            while: %{public}@
+          )
+          """, log: log, type: .debug, e.description, state.description)
+        return
+
+      case .video:
+        os_log("""
+          unhandled: (
+            event: %{public}@
+            while: %{public}@
+          )
+          """, log: log, type: .error, e.description, state.description)
+        fatalError(String(describing: e))
+      }
+    }
+  }
+
   private func event(_ e: PlaybackEvent) {
     sQueue.sync {
-      os_log("event: %{public}@", log: log, type: .debug, e.description)
-
-      // MARK: ...occured while:
-      switch state {
-
-      case .inactive(let fault):
-        // MARK: inactive
-        guard fault == nil else {
-          os_log("unresolved error while inactive: %{public}@",
-                 log: log, type: .error, fault! as CVarArg)
-          fatalError(String(describing: fault))
-        }
-
-        switch e {
-        case .change(let entry):
-          guard let newEntry = entry else {
-            return state = deactivate()
-          }
-          do {
-            try activate()
-          } catch {
-            return state = .inactive(.session)
-          }
-          return state = prepare(newEntry, playing: false)
-
-        case .error, .end, .paused, .playing, .ready, .video,
-             .toggle, .resume, .pause:
-          os_log("""
-          unhandled: {
-            event: %{public}@
-            while: %{public}@
-          }
-          """, log: log, type: .error, e.description, state.description)
-          fatalError(String(describing: e))
-        }
-
-      case .paused(let pausedEntry, let pausedError):
-        // MARK: paused
-        switch e {
-        case .change(let entry):
-          // Checking the error to give a chance for retrying.
-          if pausedError == nil {
-            guard entry != pausedEntry else {
-              return
-            }
-          }
-          guard let newEntry = entry else {
-            return state = deactivate()
-          }
-          return state = prepare(newEntry, playing: false)
-
-        case .toggle, .resume:
-          return state = prepare(pausedEntry, playing: true)
-
-        case .playing:
-          guard
-            let player = self.player,
-            let tracks = player.currentItem?.tracks,
-            let type = pausedEntry.enclosure?.type else {
-            fatalError("impossible")
-          }
-          if isVideo(tracks: tracks, type: type) {
-            return state = .viewing(pausedEntry, player)
-          } else {
-            return state = .listening(pausedEntry)
-          }
-
-        case .ready:
-          return state = seek(pausedEntry, playing: false)
-
-        case .paused, .video, .pause:
-          os_log("""
-          ignoring: {
-            event: %{public}@
-            while: %{public}@
-          }
-          """, log: log, type: .debug, e.description, state.description)
-          return
-
-        case .error(let er):
-          pausePlayer()
-          let itemError = self.player?.currentItem?.error ?? er
-          os_log("error while paused: %{public}@", log: log, type: .error,
-                 itemError as CVarArg)
-          return state = PlaybackState(paused: pausedEntry, error: itemError)
-
-        case .end:
-          os_log("""
-          unhandled: {
-            event: %{public}@
-            while: %{public}@
-          }
-          """, log: log, type: .error, e.description, state.description)
-          fatalError(String(describing: e))
-        }
-
-      case .preparing(let preparingEntry, let preparingShouldPlay):
-        // MARK: preparing
-        switch e {
-        case .error(let er):
-          pausePlayer()
-          let itemError = self.player?.currentItem?.error ?? er
-          os_log("error while preparing: %{public}@", log: log, type: .error,
-                 itemError as CVarArg)
-          return state = PlaybackState(paused: preparingEntry, error: itemError)
-
-        case .resume:
-          return state = .preparing(preparingEntry, true)
-
-        case .pause:
-          return pausePlayer()
-
-        case .toggle:
-          return state = .preparing(preparingEntry, !preparingShouldPlay)
-
-        case .paused:
-          return state = .paused(preparingEntry, nil)
-
-        case .ready:
-          return state = seek(preparingEntry, playing: preparingShouldPlay)
-
-        case .change(let entry):
-          guard entry != preparingEntry else {
-            return
-          }
-          guard let newEntry = entry else {
-            return state = deactivate()
-          }
-          return state = prepare(newEntry, playing: preparingShouldPlay)
-
-        case .playing:
-          guard
-            let player = self.player,
-            let tracks = player.currentItem?.tracks,
-            let type = preparingEntry.enclosure?.type else {
-            fatalError("impossible")
-          }
-          if isVideo(tracks: tracks, type: type) {
-            return state = .viewing(preparingEntry, player)
-          } else {
-            return state = .listening(preparingEntry)
-          }
-
-        case .video:
-          os_log("""
-          ignoring: {
-            event: %{public}@
-            while: %{public}@
-          }
-          """, log: log, type: .debug, e.description, state.description)
-          return
-
-        case .end:
-          os_log("""
-          unhandled: {
-            event: %{public}@
-            while: %{public}@
-          }
-          """, log: log, type: .error, e.description, state.description)
-          fatalError(String(describing: e))
-        }
-
-      case .listening(let consumingEntry), .viewing(let consumingEntry, _):
-        // MARK: listening/viewing
-        switch e {
-        case .error(let er):
-          pausePlayer()
-          
-          let itemError = self.player?.currentItem?.error ?? er
-          os_log("error while listening or viewing: %{public}@",
-                 log: log, type: .error, itemError as CVarArg)
-          return state = PlaybackState(paused: consumingEntry, error: itemError)
-
-        case .paused, .end:
-          assert(player?.error == nil)
-          assert(player?.currentItem?.error == nil)
-          setCurrentTime()
-          return state = .paused(consumingEntry, nil)
-
-        case .change(let changingEntry):
-          guard changingEntry != consumingEntry else {
-            return
-          }
-          setCurrentTime()
-          guard let actualEntry = changingEntry else {
-            return state = deactivate()
-          }
-          return state = prepare(actualEntry)
-
-        case .toggle, .pause:
-          return pausePlayer()
-
-        case .ready, .playing, .resume:
-          os_log("""
-          ignoring: {
-            event: %{public}@
-            while: %{public}@
-          }
-          """, log: log, type: .debug, e.description, state.description)
-          return
-
-        case .video:
-          os_log("""
-          unhandled: {
-            event: %{public}@
-            while: %{public}@
-          }
-          """, log: log, type: .error, e.description, state.description)
-          fatalError(String(describing: e))
-        }
-
-      }
+      // Just saving an indention in the big switch above.
+      updateState(e)
     }
   }
 
@@ -690,9 +706,9 @@ extension PlaybackSession {
   private func activate() throws {
     os_log("activating", log: log)
 
-    let session = AVAudioSession.sharedInstance()
-    try session.setCategory(AVAudioSessionCategoryPlayback)
-    try session.setActive(true)
+    let s = AVAudioSession.sharedInstance()
+    try s.setCategory(.playback, mode: .spokenAudio, policy: .longForm)
+    try s.setActive(true)
 
     addRemoteCommandTargets()
   }
@@ -703,9 +719,9 @@ extension PlaybackSession {
     do {
       try AVAudioSession.sharedInstance().setActive(false)
     } catch {
-      return .inactive(.session)
+      return .inactive(.session, false)
     }
-    return .inactive(nil)
+    return .inactive(nil, false)
   }
 
   public func reclaim() {
@@ -731,15 +747,7 @@ extension PlaybackSession: Playing {
   }
   
   public func setCurrentEntry(_ newValue: Entry?) {
-    worker.async {
-      guard newValue != self.currentEntry else {
-        return
-      }
-      
-      if let entry = newValue {
-        assert(entry.enclosure != nil, "URL required")
-      }
-      
+    DispatchQueue.global(qos: .userInitiated).async {
       self.event(.change(newValue))
     }
   }
@@ -758,18 +766,16 @@ extension PlaybackSession: Playing {
     }
   }
   
-  // TODO: Review API
-  //
-  // As the returns of these APIs, initially meant for remote command blocks,
-  // are all statically returning true, these have to thought over.
+  // Following returns are burocratic, without blocking, we don’t know the
+  // outcome.
 
   public func forward() -> Bool {
-    worker.async {
+    DispatchQueue.global(qos: .userInitiated).async {
       guard let item = self.delegate?.nextItem() else {
         return
       }
-      
-      self.setCurrentEntry(item)
+
+      self.event(.change(item))
       
       guard self.checkState() else {
         os_log("forward command failed", log: log, type: .error)
@@ -781,12 +787,12 @@ extension PlaybackSession: Playing {
   }
 
   public func backward() -> Bool {
-    worker.async {
+    DispatchQueue.global(qos: .userInitiated).async {
       guard let item = self.delegate?.previousItem() else {
         return
       }
       
-      self.setCurrentEntry(item)
+      self.event(.change(item))
       
       guard self.checkState() else {
         os_log("backward command failed", log: log, type: .error)
@@ -799,7 +805,7 @@ extension PlaybackSession: Playing {
 
   @discardableResult
   public func resume() -> Bool {
-    worker.async {
+    DispatchQueue.global(qos: .userInitiated).async {
       self.event(.resume)
       
       guard self.checkState() else {
@@ -813,7 +819,7 @@ extension PlaybackSession: Playing {
 
   @discardableResult
   public func pause() -> Bool {
-    worker.async {
+    DispatchQueue.global(qos: .userInitiated).async {
       self.event(.pause)
       
       guard self.checkState() else {
@@ -827,7 +833,7 @@ extension PlaybackSession: Playing {
 
   @discardableResult
   public func toggle() -> Bool {
-    worker.async {
+    DispatchQueue.global(qos: .userInitiated).async {
       self.event(.toggle)
       
       guard self.checkState() else {
@@ -840,4 +846,3 @@ extension PlaybackSession: Playing {
   }
 
 }
-

@@ -24,12 +24,15 @@ import AVKit
 ///
 /// # inactive
 ///
-/// - `.inactive(Error?)`
+/// - `.inactive(Error?, Resuming)`
 ///
 /// A Playback session starts **inactive** with an unconfigured, inactive
 /// `AVAudioSession`, waiting for `.change(Entry?)` to start, trapping all
-/// all other events. Being **inactive** may be unintended, so this state
-/// optionally stores an error.
+/// all other events, except `.resume`, which turns on `Resuming`, so the
+/// next `.change(Entry?)` will start playing.
+///
+/// Being **inactive** may be unintended, so this state optionally stores an
+/// error, the cause of inactivity.
 ///
 /// ## change
 ///
@@ -84,16 +87,18 @@ import AVKit
 /// ...
 ///
 ///
-public enum PlaybackState {
+public enum PlaybackState: Equatable {
+
+  public typealias Resuming = Bool
   
   /// The session is inactive.
-  case inactive(PlaybackError?)
+  case inactive(PlaybackError?, Resuming)
   
   /// The current item has been paused.
   case paused(Entry, PlaybackError?)
   
   /// Preparing a new item for playback.
-  case preparing(Entry, Bool)
+  case preparing(Entry, Resuming)
   
   /// Playing an audible item.
   case listening(Entry)
@@ -122,31 +127,6 @@ public enum PlaybackState {
       }
     }()
     self = .paused(entry, playbackError)
-  }
-  
-}
-
-extension PlaybackState: Equatable {
-  
-  public static func ==(lhs: PlaybackState, rhs: PlaybackState) -> Bool {
-    switch (lhs, rhs) {
-    case (.inactive(let a), .inactive(let b)):
-      return a == b
-    case (.paused(let a, let aa), .paused(let b, let bb)):
-      return a == b && aa == bb
-    case (.listening(let a), .listening(let b)):
-      return a == b
-    case (.preparing(let a), .preparing(let b)):
-      return a == b
-    case (.viewing(let a, _), .viewing(let b, _)):
-      return a == b
-    case (.inactive, _),
-         (.paused, _),
-         (.listening, _),
-         (.preparing, _),
-         (.viewing, _):
-      return false
-    }
   }
   
 }
