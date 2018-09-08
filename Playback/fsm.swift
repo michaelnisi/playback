@@ -89,11 +89,18 @@ import AVKit
 ///
 public enum PlaybackState: Equatable {
 
+  /// Decides if we should try to resume playback when leaving this state.
   public typealias Resuming = Bool
   
   /// The session is inactive.
   case inactive(PlaybackError?, Resuming)
-  
+
+  // TODO: Consider putting AVPlayerItem in following (playing) states
+  //
+  // We have to separate player and item to support AirPlay for audio AND video.
+  // I think, the key to accomplish this might be understanding the player as
+  // ephemeral object, part of our actual state, though, is the item.
+
   /// The current item has been paused.
   case paused(Entry, PlaybackError?)
   

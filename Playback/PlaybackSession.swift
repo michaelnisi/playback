@@ -35,7 +35,7 @@ public final class PlaybackSession: NSObject, Playback {
 
   private let times: Times
 
-  // Internal serial queue.
+  // Internal serial queue, our inbox for events.
   private let sQueue = DispatchQueue(label: "ink.codes.playback.serial")
 
   /// Makes a new playback session.
@@ -50,7 +50,7 @@ public final class PlaybackSession: NSObject, Playback {
 
   // MARK: Internals
 
-  /// The current player.
+  /// An ephemeral player currently in use.
   private var player: AVPlayer?
 
   /// The URL of the currently playing asset.
@@ -236,8 +236,6 @@ public final class PlaybackSession: NSObject, Playback {
       let status = AVPlayer.TimeControlStatus(rawValue: s) else {
         return
     }
-
-    os_log("handling time control change: errors: %@", log: log, type: .debug, player?.currentItem?.errorLog() ?? "no error log")
 
     switch status {
     case .paused:
@@ -468,8 +466,6 @@ public final class PlaybackSession: NSObject, Playback {
     }
   }
 
-  /// ⚠️ This method is no joke, it traps if we mess up. Selected events,
-  /// however, just get logged and ignored to save the day.
   private func updateState(_ e: PlaybackEvent) {
     os_log("handling event: %{public}@", log: log, type: .debug, e.description)
 
@@ -495,6 +491,7 @@ public final class PlaybackSession: NSObject, Playback {
         return state = prepare(newEntry, playing: resuming)
 
       case .resume:
+        os_log("** resume before change event while inactive", log: log)
         return state = .inactive(fault, true)
 
       case .error, .end, .paused, .playing, .ready, .video,
@@ -745,9 +742,15 @@ extension PlaybackSession: Playing {
       return nil
     }
   }
+
+  /// A system queue for our non-blocking surface area. Note, how all changes
+  /// are routed through the state machine, using `event(_ e: PlaybackEvent)`.
+  private var incoming: DispatchQueue {
+    return DispatchQueue.global(qos: .userInitiated)
+  }
   
   public func setCurrentEntry(_ newValue: Entry?) {
-    DispatchQueue.global(qos: .userInitiated).async {
+    incoming.async {
       self.event(.change(newValue))
     }
   }
@@ -765,12 +768,12 @@ extension PlaybackSession: Playing {
       return false
     }
   }
-  
-  // Following returns are burocratic, without blocking, we don’t know the
-  // outcome.
+
+  // Following returns are burocratic, without blocking, and that’s what we
+  // want, we don’t know the outcome.
 
   public func forward() -> Bool {
-    DispatchQueue.global(qos: .userInitiated).async {
+    incoming.async {
       guard let item = self.delegate?.nextItem() else {
         return
       }
@@ -787,7 +790,7 @@ extension PlaybackSession: Playing {
   }
 
   public func backward() -> Bool {
-    DispatchQueue.global(qos: .userInitiated).async {
+    incoming.async {
       guard let item = self.delegate?.previousItem() else {
         return
       }
@@ -805,7 +808,7 @@ extension PlaybackSession: Playing {
 
   @discardableResult
   public func resume() -> Bool {
-    DispatchQueue.global(qos: .userInitiated).async {
+    incoming.async {
       self.event(.resume)
       
       guard self.checkState() else {
@@ -819,7 +822,7 @@ extension PlaybackSession: Playing {
 
   @discardableResult
   public func pause() -> Bool {
-    DispatchQueue.global(qos: .userInitiated).async {
+    incoming.async {
       self.event(.pause)
       
       guard self.checkState() else {
@@ -833,7 +836,7 @@ extension PlaybackSession: Playing {
 
   @discardableResult
   public func toggle() -> Bool {
-    DispatchQueue.global(qos: .userInitiated).async {
+    incoming.async {
       self.event(.toggle)
       
       guard self.checkState() else {
