@@ -54,9 +54,15 @@ extension PlaybackSession: RemoteCommandProxying {
     os_log("handling remote command: next track", log: log, type: .debug)
     return status(forward())
   }
-  
-  func onSeek(event: MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus {
-    return .noActionableNowPlayingItem
+
+  func onChangePlaybackPosition(event: MPRemoteCommandEvent
+  ) -> MPRemoteCommandHandlerStatus {
+    os_log("handling remote command: change playback position", log: log, type: .debug)
+    guard let e = event as? MPChangePlaybackPositionCommandEvent else {
+      return .commandFailed
+    }
+
+    return status(scrub(e.positionTime))
   }
   
   // MARK: - MPRemoteCommandCenter
@@ -71,6 +77,9 @@ extension PlaybackSession: RemoteCommandProxying {
       
       rcc.pauseCommand.addTarget(handler: self.onPause)
       rcc.playCommand.addTarget(handler: self.onPlay)
+
+      rcc.changePlaybackPositionCommand.addTarget(handler: self.onChangePlaybackPosition)
+
       rcc.togglePlayPauseCommand.addTarget(handler: self.onToggle)
       rcc.nextTrackCommand.addTarget(handler: self.onNextTrack)
       rcc.previousTrackCommand.addTarget(handler: self.onPreviousTrack)

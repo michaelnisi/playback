@@ -142,16 +142,16 @@ extension PlaybackState: CustomStringConvertible {
   
   public var description: String {
     switch self {
-    case .inactive(let error):
-      return "PlaybackState: inactive: \(String(describing: error))"
-    case .listening(let entry):
-      return "PlaybackState: listening: \(String(describing: entry))"
-    case .paused(let entry):
-      return "PlaybackState: paused: \(String(describing: entry))"
-    case .preparing(let entry):
-      return "PlaybackState: preparing: \(String(describing: entry))"
-    case .viewing(let entry, _):
-      return "PlaybackState: viewing: \(String(describing: entry))"
+    case .inactive(let s):
+      return "PlaybackState: inactive: \(s)"
+    case .listening(let s):
+      return "PlaybackState: listening: \(s)"
+    case .paused(let s):
+      return "PlaybackState: paused: \(s)"
+    case .preparing(let s):
+      return "PlaybackState: preparing: \(s)"
+    case .viewing(let s):
+      return "PlaybackState: viewing: \(s)"
     }
   }
   
@@ -171,6 +171,7 @@ enum PlaybackEvent {
   case playing
   case ready
   case video
+  case scrub(TimeInterval)
 }
 
 extension PlaybackEvent: CustomStringConvertible {
@@ -197,6 +198,8 @@ extension PlaybackEvent: CustomStringConvertible {
       return "PlaybackEvent: ready"
     case .video:
       return "PlaybackEvent: video"
+    case .scrub(let position):
+      return "PlaybackEvent: scrub: \(position)"
     }
   }
   

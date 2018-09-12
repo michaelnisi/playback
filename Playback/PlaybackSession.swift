@@ -13,7 +13,7 @@ import Foundation
 import os.log
 import Ola
 
-let log = OSLog.init(subsystem: "ink.codes.playback", category: "av")
+let log = OSLog(subsystem: "ink.codes.playback", category: "av")
 
 /// Persists play times.
 public protocol Times {
@@ -98,12 +98,14 @@ public final class PlaybackSession: NSObject, Playback {
     return CMTime()
   }
 
-  private func startTime(item: AVPlayerItem?, url: String) -> CMTime? {
+  private func startTime(item: AVPlayerItem?, url: String, position: TimeInterval? = nil) -> CMTime? {
     guard let seekableTimeRanges = item?.seekableTimeRanges else {
       return nil
     }
 
-    let t = time(for: url)
+    let t = position == nil ?
+      time(for: url) :
+      CMTime(seconds: position!, preferredTimescale: 1000000)
 
     guard let st = PlaybackSession.seekableTime(t, within: seekableTimeRanges) else {
       guard let r = seekableTimeRanges.first as? CMTimeRange else {
@@ -115,19 +117,21 @@ public final class PlaybackSession: NSObject, Playback {
     return st
   }
 
+  // TODO: Review
+
   /// Sets the playback time to previous for `entry`.
-  public func seek(_ entry: Entry, playing: Bool) -> PlaybackState {
+  public func seek(_ entry: Entry, playing: Bool, position: TimeInterval? = nil) -> PlaybackState {
     guard
       let player = self.player,
       let enclosure = entry.enclosure,
-      let tracks = player.currentItem?.tracks else {
-        fatalError("requirements to seek and play not met")
+      let tracks = player.currentItem?.tracks, !tracks.isEmpty else {
+      fatalError("requirements to seek and play not met")
     }
-    
-    guard player.rate != 1, !tracks.isEmpty else {
-      return state
-    }
-    
+
+//    guard !tracks.isEmpty, player.rate != 1 else {
+//      return state
+//    }
+
     let newState: PlaybackState = {
       guard playing else {
         return .paused(entry, nil)
@@ -137,7 +141,7 @@ public final class PlaybackSession: NSObject, Playback {
         : .listening(entry)
     }()
     
-    guard let time = startTime(item: player.currentItem, url: enclosure.url) else {
+    guard let time = startTime(item: player.currentItem, url: enclosure.url, position: position) else {
       if playing {
         player.play()
       }
@@ -150,6 +154,9 @@ public final class PlaybackSession: NSObject, Playback {
       guard finished else {
         return
       }
+
+      self.setCurrentTime()
+
       DispatchQueue.main.async {
         if playing {
           player.play()
@@ -394,10 +401,13 @@ public final class PlaybackSession: NSObject, Playback {
 
   // MARK: - FSM
 
+  /// Saves the current time position of the player.
   private func setCurrentTime() {
+    os_log("** setting current time", log: log, type: .debug)
+
     guard let player = self.player,
       let url = currentEntry?.enclosure?.url else {
-      os_log("** could not set time", log: log, type: .debug)
+      os_log("aborting: unexpected attempt to set time", log: log)
       return
     }
 
@@ -495,7 +505,7 @@ public final class PlaybackSession: NSObject, Playback {
         return state = .inactive(fault, true)
 
       case .error, .end, .paused, .playing, .ready, .video,
-           .toggle, .pause:
+           .toggle, .pause, .scrub:
         os_log("""
           unhandled: (
             event: %{public}@
@@ -554,6 +564,9 @@ public final class PlaybackSession: NSObject, Playback {
         os_log("error while paused: %{public}@", log: log, type: .error,
                itemError as CVarArg)
         return state = PlaybackState(paused: pausedEntry, error: itemError)
+
+      case .scrub(let position):
+        return state = seek(pausedEntry, playing: false, position: position)
 
       case .end:
         os_log("""
@@ -626,6 +639,10 @@ public final class PlaybackSession: NSObject, Playback {
           """, log: log, type: .debug, e.description, state.description)
         return
 
+      case .scrub:
+        // TODO: Handle events
+        fatalError("must be handled")
+
       case .end:
         os_log("""
           unhandled: (
@@ -666,6 +683,9 @@ public final class PlaybackSession: NSObject, Playback {
       case .toggle, .pause:
         return pausePlayer()
 
+      case .scrub(let position):
+        return state = seek(playingEntry, playing: true, position: position)
+
       case .ready, .playing, .resume:
         os_log("""
           ignoring: (
@@ -701,7 +721,7 @@ public final class PlaybackSession: NSObject, Playback {
 extension PlaybackSession {
 
   private func activate() throws {
-    os_log("activating", log: log)
+    os_log("activating", log: log, type: .debug)
 
     let s = AVAudioSession.sharedInstance()
     try s.setCategory(.playback, mode: .spokenAudio, policy: .longForm)
@@ -711,7 +731,7 @@ extension PlaybackSession {
   }
 
   private func deactivate() -> PlaybackState {
-    os_log("deactivatiing", log: log)
+    os_log("deactivatiing", log: log, type: .debug)
     
     do {
       try AVAudioSession.sharedInstance().setActive(false)
@@ -722,7 +742,7 @@ extension PlaybackSession {
   }
 
   public func reclaim() {
-    addRemoteCommandTargets()
+    os_log("reclaiming: does nothing yet", log: log, type: .debug)
   }
 
 }
@@ -839,6 +859,20 @@ extension PlaybackSession: Playing {
     incoming.async {
       self.event(.toggle)
       
+      guard self.checkState() else {
+        os_log("toggle command failed", log: log, type: .error)
+        return
+      }
+    }
+
+    return true
+  }
+
+  @discardableResult
+  public func scrub(_ position: TimeInterval) -> Bool {
+    incoming.async {
+      self.event(.scrub(position))
+
       guard self.checkState() else {
         os_log("toggle command failed", log: log, type: .error)
         return
