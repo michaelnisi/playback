@@ -184,8 +184,11 @@ public final class PlaybackSession: NSObject, Playback {
 
     guard let enclosure = currentEntry?.enclosure,
       PlaybackSession.isVideo(tracks: tracks, type: enclosure.type) else {
-        return
+      return
     }
+
+    // Allowing external playback mode for videos.
+    player?.allowsExternalPlayback = true
 
     event(.video)
   }

@@ -87,6 +87,7 @@ extension PlaybackSession: RemoteCommandProxying {
       rcc.changePlaybackPositionCommand.addTarget(handler: self.onChangePlaybackPosition)
 
       rcc.togglePlayPauseCommand.addTarget(handler: self.onToggle)
+
       rcc.nextTrackCommand.addTarget(handler: self.onNextTrack)
       rcc.previousTrackCommand.addTarget(handler: self.onPreviousTrack)
     }
