@@ -117,8 +117,6 @@ public final class PlaybackSession: NSObject, Playback {
     return st
   }
 
-  // TODO: Review
-
   /// Sets the playback time to previous for `entry`.
   public func seek(_ entry: Entry, playing: Bool, position: TimeInterval? = nil) -> PlaybackState {
     guard
@@ -127,10 +125,6 @@ public final class PlaybackSession: NSObject, Playback {
       let tracks = player.currentItem?.tracks, !tracks.isEmpty else {
       fatalError("requirements to seek and play not met")
     }
-
-//    guard !tracks.isEmpty, player.rate != 1 else {
-//      return state
-//    }
 
     let newState: PlaybackState = {
       guard playing else {
@@ -141,7 +135,8 @@ public final class PlaybackSession: NSObject, Playback {
         : .listening(entry)
     }()
     
-    guard let time = startTime(item: player.currentItem, url: enclosure.url, position: position) else {
+    guard let time = startTime(
+      item: player.currentItem, url: enclosure.url, position: position) else {
       if playing {
         player.play()
       }
@@ -155,7 +150,10 @@ public final class PlaybackSession: NSObject, Playback {
         return
       }
 
-      self.setCurrentTime()
+      // Saving successfully seeked time positions.
+      if position != nil {
+        self.setCurrentTime()
+      }
 
       DispatchQueue.main.async {
         if playing {
@@ -403,8 +401,6 @@ public final class PlaybackSession: NSObject, Playback {
 
   /// Saves the current time position of the player.
   private func setCurrentTime() {
-    os_log("** setting current time", log: log, type: .debug)
-
     guard let player = self.player,
       let url = currentEntry?.enclosure?.url else {
       os_log("aborting: unexpected attempt to set time", log: log)
@@ -538,7 +534,7 @@ public final class PlaybackSession: NSObject, Playback {
           let player = self.player,
           let tracks = player.currentItem?.tracks,
           let type = pausedEntry.enclosure?.type else {
-            fatalError("impossible")
+          fatalError("impossible")
         }
         if PlaybackSession.isVideo(tracks: tracks, type: type) {
           return state = .viewing(pausedEntry, player)
@@ -617,7 +613,7 @@ public final class PlaybackSession: NSObject, Playback {
           let player = self.player,
           let tracks = player.currentItem?.tracks,
           let type = preparingEntry.enclosure?.type else {
-            fatalError("impossible")
+          fatalError("impossible")
         }
 
         let isVideo = PlaybackSession.isVideo(tracks: tracks, type: type)
@@ -630,18 +626,14 @@ public final class PlaybackSession: NSObject, Playback {
           return state = .listening(preparingEntry)
         }
 
-      case .video:
+      case .video, .scrub:
         os_log("""
           ** ignoring: (
             event: %{public}@
             while: %{public}@
           )
-          """, log: log, type: .debug, e.description, state.description)
+          """, log: log, e.description, state.description)
         return
-
-      case .scrub:
-        // TODO: Handle events
-        fatalError("must be handled")
 
       case .end:
         os_log("""
@@ -724,6 +716,10 @@ extension PlaybackSession {
     os_log("activating", log: log, type: .debug)
 
     let s = AVAudioSession.sharedInstance()
+
+    // Activate should run once.
+    precondition(s.mode != .spokenAudio)
+
     try s.setCategory(.playback, mode: .spokenAudio, policy: .longForm)
     try s.setActive(true)
 
@@ -775,8 +771,8 @@ extension PlaybackSession: Playing {
     }
   }
 
-  /// Synchronously checking the playback state with this function isn’t
-  /// reliable, for its asynchronous nature. Paused state, for example,
+  /// Synchronously checking the playback state like this can only provide
+  /// guidance, for its asynchronous nature. Paused state, for example,
   /// is entered after a delay, when the playback actually has been paused.
   private func checkState() -> Bool {
     switch state {
@@ -788,9 +784,6 @@ extension PlaybackSession: Playing {
       return false
     }
   }
-
-  // Following returns are burocratic, without blocking, and that’s what we
-  // want, we don’t know the outcome.
 
   public func forward() -> Bool {
     incoming.async {

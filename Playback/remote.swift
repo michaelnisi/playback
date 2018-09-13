@@ -74,7 +74,7 @@ extension PlaybackSession: RemoteCommandProxying {
       dispatchPrecondition(condition: .onQueue(DispatchQueue.main))
 
       let rcc = MPRemoteCommandCenter.shared()
-      
+
       rcc.pauseCommand.addTarget(handler: self.onPause)
       rcc.playCommand.addTarget(handler: self.onPlay)
 
@@ -84,21 +84,6 @@ extension PlaybackSession: RemoteCommandProxying {
       rcc.nextTrackCommand.addTarget(handler: self.onNextTrack)
       rcc.previousTrackCommand.addTarget(handler: self.onPreviousTrack)
     }
-
   }
-  
-//  func removeRemoteCommandTargets() {
-//    guard let targets = remoteCommandTargets else {
-//      return
-//    }
-//
-//    os_log("removing remote commands", log: log)
-//
-//    let rcc = MPRemoteCommandCenter.shared()
-//    rcc.pauseCommand.removeTarget(targets.pause)
-//    rcc.playCommand.removeTarget(targets.play)
-//    rcc.togglePlayPauseCommand.removeTarget(targets.togglePlayPause)
-//    rcc.nextTrackCommand.removeTarget(targets.nextTrack)
-//    rcc.previousTrackCommand.removeTarget(targets.previousTrack)
-//  }
+
 }
