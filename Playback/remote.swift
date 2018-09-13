@@ -10,6 +10,9 @@ import Foundation
 import MediaPlayer
 import os.log
 
+/// Indicates if remote commands have been added.
+fileprivate var once = false
+
 protocol RemoteCommandProxying {
   func addRemoteCommandTargets()
 }
@@ -68,8 +71,11 @@ extension PlaybackSession: RemoteCommandProxying {
   // MARK: - MPRemoteCommandCenter
   
   func addRemoteCommandTargets() {
-    os_log("adding remote commands", log: log)
-    
+    os_log("adding remote commands", log: log, type: .debug)
+
+    precondition(!once)
+    once = true
+
     DispatchQueue.main.async {
       dispatchPrecondition(condition: .onQueue(DispatchQueue.main))
 

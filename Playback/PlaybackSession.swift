@@ -717,9 +717,6 @@ extension PlaybackSession {
 
     let s = AVAudioSession.sharedInstance()
 
-    // Activate should run once.
-    precondition(s.mode != .spokenAudio)
-
     try s.setCategory(.playback, mode: .spokenAudio, policy: .longForm)
     try s.setActive(true)
 
