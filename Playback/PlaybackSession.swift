@@ -13,7 +13,7 @@ import Foundation
 import os.log
 import Ola
 
-let log = OSLog(subsystem: "ink.codes.playback", category: "av")
+let log = OSLog.disabled
 
 /// Persists play times.
 public protocol Times {
@@ -51,7 +51,24 @@ public final class PlaybackSession: NSObject, Playback {
   // MARK: Internals
 
   /// An ephemeral player currently in use.
-  private var player: AVPlayer?
+  private var player: AVPlayer? {
+    willSet {
+      player?.removeObserver(
+        self,
+        forKeyPath: #keyPath(AVPlayer.timeControlStatus),
+        context: &playerContext
+      )
+    }
+
+    didSet {
+      player?.addObserver(
+        self,
+        forKeyPath: #keyPath(AVPlayer.timeControlStatus),
+        options: [.old, .new],
+        context: &playerContext
+      )
+    }
+  }
 
   /// The URL of the currently playing asset.
   private var assetURL: URL? {
@@ -272,7 +289,7 @@ public final class PlaybackSession: NSObject, Playback {
       onTimeControlChange(change)
     default:
       super.observeValue(
-        forKeyPath: keyPath, of: object,change: change, context: context)
+        forKeyPath: keyPath, of: object, change: change, context: context)
     }
   }
 
@@ -339,8 +356,8 @@ public final class PlaybackSession: NSObject, Playback {
   private var playerContext = 0
 
   /// Passing `nil` as `url` dismisses the current player and returns `nil`.
-  @discardableResult
-  private func makeAVPlayer(url: URL? = nil) -> AVPlayer? {
+  @discardableResult private
+  func makeAVPlayer(url: URL? = nil) -> AVPlayer? {
     if let prev = player?.currentItem {
       removeObservers(item: prev)
       delegate?.dismissVideo()
@@ -361,17 +378,7 @@ public final class PlaybackSession: NSObject, Playback {
     // example, in disabling volume controls in Control Centre.
 
     newPlayer.allowsExternalPlayback = false
-
     newPlayer.actionAtItemEnd = .pause
-
-    let keyPath = #keyPath(AVPlayer.timeControlStatus)
-
-    newPlayer.addObserver(self,
-                          forKeyPath: keyPath,
-                          options: [.old, .new],
-                          context: &playerContext)
-
-    player?.removeObserver(self, forKeyPath: keyPath, context: &playerContext)
 
     return newPlayer
   }
@@ -391,8 +398,12 @@ public final class PlaybackSession: NSObject, Playback {
     }
     
     guard assetURL != proxiedURL else {
-      assert(player?.status == .readyToPlay)
-      return seek(entry, playing: playing)
+      if player?.status == .readyToPlay,
+        !(player?.currentItem?.tracks.isEmpty ?? true) {
+        return seek(entry, playing: playing)
+      } else {
+        return state
+      }
     }
     
     player = makeAVPlayer(url: proxiedURL)
@@ -600,6 +611,10 @@ public final class PlaybackSession: NSObject, Playback {
         return state = .paused(preparingEntry, nil)
 
       case .ready:
+        guard !(player?.currentItem?.tracks.isEmpty ?? true) else {
+          os_log("** waiting for tracks", log: log)
+          return state = .preparing(preparingEntry, preparingShouldPlay)
+        }
         return state = seek(preparingEntry, playing: preparingShouldPlay)
 
       case .change(let entry):
