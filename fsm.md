@@ -60,14 +60,62 @@ After `ready` in **paused** state, we seek the player to the previous play time 
 
 If an `error` occures during **paused**, it will be added to the **paused** state, in which we remain.
 
-### Ignored Events
+```swift
+.paused | .video | .pause
+```
 
-While in **paused**, `.paused`, `.video`, and `.pause` events are ignored.
+These events are handled but ignored, leaving us **paused**.
 
 ## preparing
 
-To be continued…
+Preparing is a transitional state, handling most events.
+
+### Events
+
+```swift
+.error(PlaybackError)
+```
+
+```swift
+.resume
+```
+
+Continue **preparing** but will resume once we are **ready**.
+
+```swift
+.pause
+```
+
+Pauses the player changing to **paused**.
+
+```swift
+.toggle
+```
+
+Keep **preparing** but toggle automatic resuming.
+
+```swift
+.ready
+```
+
+```swift
+.change(Entry)
+```
+
+```swift
+.playing
+```
+
+```swift
+.playing
+```
+
+```swift
+.video | .scrub
+```
+
+These events are ignored without trapping, we continue in **preparing**.
 
 ## listening/viewing
 
-To be continued…
+Listening and viewing are logically incorporated into a single state, just marking the difference between audio and video playback.
