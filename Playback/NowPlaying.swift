@@ -12,8 +12,9 @@ import AVKit
 import FeedKit
 import os.log
 
+/// Proxies now playing info center.
 public struct NowPlaying {
-  
+
   /// Resets the current now playing info.
   public static func reset() {
     MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
@@ -33,8 +34,10 @@ public struct NowPlaying {
     ]
     
     let boundsSize = CGSize(width: 600, height: 600)
+
     let artwork = MPMediaItemArtwork(boundsSize: boundsSize) { size in
-      guard let img = ImageRepository.shared.image(for: entry, in: size) else {
+      guard let img = ImageRepository.shared
+        .loadImage(item: entry, size: size) else {
         return #imageLiteral(resourceName: "Oval")
       }
       return img
