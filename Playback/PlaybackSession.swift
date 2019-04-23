@@ -228,6 +228,8 @@ public final class PlaybackSession: NSObject, Playback {
     case .unknown:
       // TODO: Is this even an error?
       event(.error(.unknown))
+    @unknown default:
+      fatalError("unknown case in switch: \(status)")
     }
   }
 
@@ -269,6 +271,8 @@ public final class PlaybackSession: NSObject, Playback {
       event(.playing)
     case .waitingToPlayAtSpecifiedRate:
       break
+    @unknown default:
+      fatalError("unknown case in switch: \(status)")
     }
   }
 
