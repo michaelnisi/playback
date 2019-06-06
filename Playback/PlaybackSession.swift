@@ -36,7 +36,10 @@ public final class PlaybackSession: NSObject, Playback {
   private let times: Times
 
   // Internal serial queue, our inbox for events.
-  private let sQueue = DispatchQueue(label: "ink.codes.playback.serial")
+  private let sQueue = DispatchQueue(
+    label: "ink.codes.playback.PlaybackSession",
+    target: .global()
+  )
 
   /// Makes a new playback session.
   ///
