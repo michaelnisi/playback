@@ -25,8 +25,7 @@ public struct NowPlaying {
   /// - Parameters:
   ///    - entry: The entry to display in playing info.
   ///    - player: The current player to probe for information.
-  public static func set(entry: Entry, player: AVPlayer? = nil) {
-    os_log("setting now playing", log: log, type: .debug)
+  public static func set(entry: Entry, player: AVPlayer? = nil) {    
     var info: [String : Any] = [
       MPMediaItemPropertyAlbumTitle: entry.feedTitle!,
       MPMediaItemPropertyMediaType: 1,
@@ -54,13 +53,15 @@ public struct NowPlaying {
     
     if let p = player {
       let rate = p.rate
-      let time = p.currentTime().seconds
       let duration = p.currentItem!.duration.seconds
+      let time = min(p.currentTime().seconds, duration) 
 
       info[MPNowPlayingInfoPropertyPlaybackRate] = rate
-      info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = time
+      info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = time 
       info[MPMediaItemPropertyPlaybackDuration] = duration
     }
+    
+    os_log("setting now playing: %@", log: log, type: .info, info)
 
     MPNowPlayingInfoCenter.default().nowPlayingInfo = info
   }

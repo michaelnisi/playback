@@ -13,14 +13,7 @@ import Foundation
 import os.log
 import Ola
 
-let log = OSLog.disabled
-
-/// Persists play times.
-public protocol Times {
-  func time(uid: String) -> CMTime?
-  func set(_ time: CMTime, for uid: String)
-  func removeTime(for uid: String)
-}
+let log = OSLog(subsystem: "ink.codes.playback", category: "sess")
 
 struct RemoteCommandTargets {
   let pause: Any?
@@ -108,14 +101,17 @@ public final class PlaybackSession: NSObject, Playback {
   /// available. The invalid time, instead of nil, enables uniform handling down
   /// the line, as supposed seek times have to be validated anyways.
   ///
-  /// - Parameter uid: The identifier for the item.
+  /// - Parameter url: The identifier for the item.
   ///
   /// - Returns: A time to resume from or an invalid time.
-  private func time(for uid: String) -> CMTime {
-    if let t = times.time(uid: uid) {
-      return CMTimeSubtract(t, CMTime(seconds: 5, preferredTimescale: t.timescale))
+  private func startTime(matching url: String) -> CMTime {
+    let t = times.time(uid: url)
+    
+    guard t.isValid, !t.isIndefinite else {
+      return CMTime()
     }
-    return CMTime()
+    
+    return CMTimeSubtract(t, CMTime(seconds: 5, preferredTimescale: t.timescale))
   }
 
   private func startTime(item: AVPlayerItem?, url: String, position: TimeInterval? = nil) -> CMTime? {
@@ -124,7 +120,7 @@ public final class PlaybackSession: NSObject, Playback {
     }
 
     let t = position == nil ?
-      time(for: url) :
+      startTime(matching: url) :
       CMTime(seconds: position!, preferredTimescale: 1000000)
 
     guard let st = PlaybackSession.seekableTime(t, within: seekableTimeRanges) else {
@@ -244,8 +240,6 @@ public final class PlaybackSession: NSObject, Playback {
   // guard.
 
   private func onDurationChange(_ change: [NSKeyValueChangeKey : Any]?) {
-    os_log("duration change", log: log, type: .debug)
-
     guard change?[.newKey] as? CMTime != change?[.oldKey] as? CMTime else {
       os_log("observed redundant duration change", log: log)
       return
@@ -328,12 +322,12 @@ public final class PlaybackSession: NSObject, Playback {
 
     nc.addObserver(self,
                    selector: #selector(onItemDidPlayToEndTime),
-                   name: NSNotification.Name.AVPlayerItemDidPlayToEndTime,
+                   name: .AVPlayerItemDidPlayToEndTime,
                    object: item)
 
     nc.addObserver(self,
                    selector: #selector(onItemNewErrorLogEntry),
-                   name: NSNotification.Name.AVPlayerItemNewErrorLogEntry,
+                   name: .AVPlayerItemNewErrorLogEntry,
                    object: item)
 
     return item
@@ -350,9 +344,9 @@ public final class PlaybackSession: NSObject, Playback {
     }
 
     let nc = NotificationCenter.default
-    let names = [
-      NSNotification.Name.AVPlayerItemDidPlayToEndTime,
-      NSNotification.Name.AVPlayerItemNewErrorLogEntry
+    let names: [NSNotification.Name] = [
+      .AVPlayerItemDidPlayToEndTime,
+      .AVPlayerItemNewErrorLogEntry
     ]
     for name in names {
       nc.removeObserver(self, name: name, object: item)
@@ -385,7 +379,7 @@ public final class PlaybackSession: NSObject, Playback {
     // example, in disabling volume controls in Control Centre.
 
     newPlayer.allowsExternalPlayback = false
-    newPlayer.actionAtItemEnd = .pause
+    newPlayer.actionAtItemEnd = .none
 
     return newPlayer
   }
@@ -413,14 +407,15 @@ public final class PlaybackSession: NSObject, Playback {
       }
     }
     
-    player = makeAVPlayer(url: proxiedURL)
+    player = makeAVPlayer(url: proxiedURL)   
     
     return .preparing(entry, playing)
   }
 
   // MARK: - FSM
 
-  /// Saves the current time position of the player.
+  /// Saves the current time position of the player. If the item is considered
+  /// as played, its time is saved as `CMTime.indefinite`.
   private func setCurrentTime() {
     guard let player = self.player,
       let url = currentEntry?.enclosure?.url else {
@@ -430,30 +425,33 @@ public final class PlaybackSession: NSObject, Playback {
 
     let t = player.currentTime()
     let threshold = CMTime(seconds: 15, preferredTimescale: t.timescale)
-
     let leading = CMTimeCompare(t, threshold)
+    
     guard leading != -1 else {
+      // This item is unplayed.
       times.removeTime(for: url)
       return
     }
 
-    if let duration = player.currentItem?.duration,
-      duration != CMTime.indefinite {
+    if let duration = player.currentItem?.duration, duration != .indefinite {
       let end = CMTimeSubtract(duration, threshold)
       let trailing = CMTimeCompare(t, end)
+      
       guard trailing == -1 else {
-        times.removeTime(for: url)
+        // This one has been completed.
+        times.set(.indefinite, for: url)
         return
       }
     }
 
+    // And this has a resumabe timestamp.
     times.set(t, for: url)
   }
 
   private var state = PlaybackState.inactive(nil, false) {
     didSet {
       os_log("new state: %{public}@, old state: %{public}@",
-             log: log, type: .debug,
+             log: log, type: .info,
              state.description, oldValue.description
       )
 
@@ -494,7 +492,7 @@ public final class PlaybackSession: NSObject, Playback {
   }
 
   private func updateState(_ e: PlaybackEvent) {
-    os_log("handling event: %{public}@", log: log, type: .debug, e.description)
+    os_log("handling event: %{public}@", log: log, type: .info, e.description)
 
     switch state {
     case .inactive(let fault, let resuming):
@@ -567,12 +565,6 @@ public final class PlaybackSession: NSObject, Playback {
         return state = seek(pausedEntry, playing: false)
 
       case .paused, .video, .pause:
-        os_log("""
-          ** ignoring: (
-            event: %{public}@
-            while: %{public}@
-          )
-          """, log: log, type: .debug, e.description, state.description)
         return
 
       case .error(let er):
@@ -677,24 +669,33 @@ public final class PlaybackSession: NSObject, Playback {
         pausePlayer()
 
         let itemError = self.player?.currentItem?.error ?? er
+        
         os_log("error while listening or viewing: %{public}@",
                log: log, type: .error, itemError as CVarArg)
+        
         return state = PlaybackState(paused: playingEntry, error: itemError)
 
-      case .paused, .end:
+      case .paused:
         assert(player?.error == nil)
         assert(player?.currentItem?.error == nil)
         setCurrentTime()
+        
         return state = .paused(playingEntry, nil)
+      
+      case .end:
+        return pausePlayer()
 
       case .change(let changingEntry):
         guard changingEntry != playingEntry else {
           return
         }
+        
         setCurrentTime()
+        
         guard let actualEntry = changingEntry else {
           return state = deactivate()
         }
+        
         return state = prepare(actualEntry)
 
       case .toggle, .pause:
@@ -704,12 +705,6 @@ public final class PlaybackSession: NSObject, Playback {
         return state = seek(playingEntry, playing: true, position: position)
 
       case .ready, .playing, .resume:
-        os_log("""
-          ignoring: (
-            event: %{public}@
-            while: %{public}@
-          )
-          """, log: log, type: .debug, e.description, state.description)
         return
 
       case .video:
@@ -738,7 +733,7 @@ public final class PlaybackSession: NSObject, Playback {
 extension PlaybackSession {
 
   private func activate() throws {
-    os_log("activating", log: log, type: .debug)
+    os_log("activating", log: log, type: .info)
 
     let s = AVAudioSession.sharedInstance()
 
@@ -749,7 +744,7 @@ extension PlaybackSession {
   }
 
   private func deactivate() -> PlaybackState {
-    os_log("deactivatiing", log: log, type: .debug)
+    os_log("deactivating", log: log, type: .info)
     
     do {
       try AVAudioSession.sharedInstance().setActive(false)
@@ -760,7 +755,7 @@ extension PlaybackSession {
   }
 
   public func reclaim() {
-    os_log("reclaiming: does nothing yet", log: log, type: .debug)
+    os_log("reclaiming: does nothing yet", log: log)
   }
 
 }
@@ -768,6 +763,14 @@ extension PlaybackSession {
 // MARK: - Playing
 
 extension PlaybackSession: Playing {
+  
+  public func isUnplayed(uid: String) -> Bool {
+    guard currentEntry?.enclosure?.url != uid else {
+      return false
+    }
+    
+    return times.isUnplayed(uid: uid)
+  }
 
   public var currentEntry: Entry? {
     switch state {
