@@ -122,10 +122,8 @@ extension TimeRepository: Times {
   public func isUnplayed(uid: String) -> Bool {
     let key = Key(uid: uid)
     
-    guard !unplayedByUIDs.contains(key.hash) else {
-      return true 
-    }
-  
-    return timestamp(key: key) == nil
+    // TODO: Measure if not hitting the store is actually faster
+    
+    return unplayedByUIDs.contains(key.hash) || timestamp(key: key) == nil
   }
 }
