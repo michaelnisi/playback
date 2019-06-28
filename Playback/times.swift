@@ -12,12 +12,13 @@ import os.log
 
 public final class TimeRepository: NSObject {
   
-  struct Key {
+  struct Key: Hashable {
     let uid: String
     
     /// A super wack hash of the `uid`.
     var hash: Int32 {
       let unicodeScalars = uid.unicodeScalars.map { $0.value }
+      
       return Int32(unicodeScalars.reduce(5381) {
         ($0 << 5) &+ $0 &+ Int32($1)
       })
@@ -51,14 +52,16 @@ extension TimeRepository {
 
     let timestampsByKeys = items.reduce([String : TimeInterval]()) { acc, item in
       let k = item.key
+      
       guard
         let v = item.value as? [NSString : NSNumber],
-        let ts = v["ts"] as? TimeInterval
-        else {
-          return acc
+        let ts = v["ts"] as? TimeInterval else {
+        return acc
       }
+      
       var tmp = acc
       tmp[k] = ts
+      
       return tmp
     }
 
@@ -73,7 +76,7 @@ extension TimeRepository {
 
     let objects = timestampsByKeys.sorted {
       $0.value > $1.value
-      }.suffix(from: TimeRepository.threshold / 2)
+    }.suffix(from: TimeRepository.threshold / 2)
 
     for object in objects {
       store.removeObject(forKey: object.key)
@@ -101,7 +104,7 @@ extension TimeRepository: Times {
     guard let ts = timestamp(key: Key(uid: uid)) else {
       return CMTime()
     }
-
+    
     return CMTime(seconds: ts.seconds, preferredTimescale: ts.timescale)
   }
 
@@ -110,20 +113,26 @@ extension TimeRepository: Times {
       os_log("removing invalid time: %{public}@", log: log, uid)
       return removeTime(for: uid)
     }
-
-    store.set(d, forKey: String(Key(uid: uid).hash))
+    
+    let key = Key(uid: uid)
+    
+    store.set(d, forKey: String(key.hash))
     vacuum()
   }
 
   public func removeTime(for uid: String) {
-    store.removeObject(forKey: String(Key(uid: uid).hash))
+    let key = Key(uid: uid)
+  
+    store.removeObject(forKey: String(key.hash))
   }
 
   public func isUnplayed(uid: String) -> Bool {
     let key = Key(uid: uid)
     
-    // TODO: Measure if not hitting the store is actually faster
-    
-    return unplayedByUIDs.contains(key.hash) || timestamp(key: key) == nil
+    guard !unplayedByUIDs.contains(key.hash) else {
+      return true
+    }
+
+    return timestamp(key: key) == nil
   }
 }

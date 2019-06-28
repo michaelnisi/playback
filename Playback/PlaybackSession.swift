@@ -428,8 +428,8 @@ public final class PlaybackSession: NSObject, Playback {
     let leading = CMTimeCompare(t, threshold)
     
     guard leading != -1 else {
-      // This item is unplayed.
-      times.removeTime(for: url)
+      // Not new but will resume from the beginning.
+      times.set(.zero, for: url)
       return
     }
 
