@@ -9,10 +9,16 @@
 import Foundation
 import AVFoundation
 
-// The playback status of an AV item.
+/// The playback status of an AV item.
 public struct Timestamp: Hashable, Codable {
+  
+  /// Contextual information of a timestamp.
   public enum Tag: Int, Codable {
+    
+    /// In progress time.
     case normal
+    
+    /// The according item has been played to its end.
     case finished
   }
   
@@ -34,7 +40,7 @@ public struct Timestamp: Hashable, Codable {
   }
 }
 
-// MARK: Encoding and Decoding
+// MARK: - Encoding and Decoding
 
 extension Timestamp {
   
@@ -46,6 +52,7 @@ extension Timestamp {
     }
     
     let rawTag = dict["tag"] as? Int ?? 0
+    
     let tag: Tag = {
       return Tag(rawValue: rawTag) ?? .normal
     }()

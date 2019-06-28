@@ -107,7 +107,7 @@ extension TimeRepository: Times {
     
     return CMTime(seconds: ts.seconds, preferredTimescale: ts.timescale)
   }
-
+  
   public func set(_ time: CMTime, for uid: String) {    
     guard let d = Timestamp(time: time)?.dictionary else {
       os_log("removing invalid time: %{public}@", log: log, uid)

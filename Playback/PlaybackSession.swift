@@ -28,7 +28,7 @@ public final class PlaybackSession: NSObject, Playback {
 
   private let times: Times
 
-  // Internal serial queue, our inbox for events.
+  /// Internal serial queue, our inbox for events.
   private let sQueue = DispatchQueue(
     label: "ink.codes.playback.PlaybackSession",
     target: .global()
@@ -413,7 +413,7 @@ public final class PlaybackSession: NSObject, Playback {
   }
 
   // MARK: - FSM
-
+  
   /// Saves the current time position of the player. If the item is considered
   /// as played, its time is saved as `CMTime.indefinite`.
   private func setCurrentTime() {
