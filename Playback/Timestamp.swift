@@ -15,7 +15,7 @@ public struct Timestamp: Hashable, Codable {
   /// Contextual information of a timestamp.
   public enum Tag: Int, Codable {
     
-    /// In progress time.
+    /// A reasonable timestamp for resuming playback (including zero).
     case normal
     
     /// The according item has been played to its end.
@@ -88,6 +88,10 @@ extension Timestamp {
     self.tag = time.isIndefinite ? .finished : .normal
   }
   
+  /// A dictionary of this timestamp.
+  /// 
+  /// For legacy reasons, we are using dictionary objects in the key-value 
+  /// store. With Timestamp being Codable, JSON Data would be better.
   var dictionary: [String: Any] {
     return [
       "seconds": seconds,

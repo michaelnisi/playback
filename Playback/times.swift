@@ -117,8 +117,6 @@ extension TimeRepository: Times {
     
     let key = Key(uid: uid)
     
-    os_log("setting: ( %@, %@ )", log: log, type: .debug, key.uid, String(describing: ts))
-    
     store.set(ts.dictionary, forKey: String(key.hash))
     vacuum()
   }
