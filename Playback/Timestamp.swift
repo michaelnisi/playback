@@ -40,6 +40,18 @@ public struct Timestamp: Hashable, Codable {
   }
 }
 
+extension Timestamp: CustomStringConvertible {
+  
+  public var description: String {
+    switch tag {
+    case .normal:
+      return "Timestamp: ( normal, \(seconds) )"
+    case .finished:
+      return "Timestamp: ( finished )"
+    }
+  }
+}
+
 // MARK: - Encoding and Decoding
 
 extension Timestamp {

@@ -109,14 +109,17 @@ extension TimeRepository: Times {
   }
   
   public func set(_ time: CMTime, for uid: String) {    
-    guard let d = Timestamp(time: time)?.dictionary else {
+    guard let ts = Timestamp(time: time) else {
       os_log("removing invalid time: %{public}@", log: log, uid)
+      
       return removeTime(for: uid)
     }
     
     let key = Key(uid: uid)
     
-    store.set(d, forKey: String(key.hash))
+    os_log("setting: ( %@, %@ )", log: log, type: .debug, key.uid, String(describing: ts))
+    
+    store.set(ts.dictionary, forKey: String(key.hash))
     vacuum()
   }
 
