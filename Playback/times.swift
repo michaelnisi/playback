@@ -1,6 +1,6 @@
 //
 //  times.swift
-//  Podest
+//  Playback
 //
 //  Created by Michael on 6/2/17.
 //  Copyright © 2017 Michael Nisi. All rights reserved.
@@ -10,79 +10,36 @@ import Foundation
 import AVFoundation
 import os.log
 
-/// Returns 32-bit hash of `string`.
-///
-/// - [djb2](http://www.cse.yorku.ca/~oz/hash.html)
-/// - [Use Your Loaf](https://useyourloaf.com/blog/swift-hashable/)
-///
-/// - Parameter string: The string to hash.
-///
-/// - Returns: A 32-bit signed Integer.
-private func djb2Hash32(string: String) -> Int32 {
-  let unicodeScalars = string.unicodeScalars.map { $0.value }
-  return Int32(unicodeScalars.reduce(5381) {
-    ($0 << 5) &+ $0 &+ Int32($1)
-  })
-}
-
-public final class TimeRepository: NSObject, Times {
-
-  public static let shared = TimeRepository()
-
-  /// The maximum number of keys in the store, before we begin to remove keys:
-  /// removing the older 256 keys.
-  static let threshold = 512
-
-  /// Produces a key for a unique identifier.
-  private static func key(from uid: String) -> String {
-    return String(djb2Hash32(string: uid))
+public final class TimeRepository: NSObject {
+  
+  struct Key: Hashable {
+    let uid: String
+    
+    /// A super wack hash of the `uid`.
+    var hash: Int32 {
+      let unicodeScalars = uid.unicodeScalars.map { $0.value }
+      
+      return Int32(unicodeScalars.reduce(5381) {
+        ($0 << 5) &+ $0 &+ Int32($1)
+      })
+    }
   }
+  
+  public static let shared = TimeRepository()
 
   private lazy var store = NSUbiquitousKeyValueStore.default
 
-  public func time(uid: String) -> CMTime? {
-    os_log("get time: %@ ", log: log, type: .debug, uid)
+  /// The maximum number of keys in the store, before we begin removing the 
+  /// older 256 keys.
+  static let threshold = 512
+  
+  /// In-memory cache for making this faster.
+  private var unplayedByUIDs = Set<Int32>()
+}
 
-    let k = TimeRepository.key(from: uid)
+// MARK: - Stable Size
 
-    guard
-      let dict = store.dictionary(forKey: k),
-      let seconds = dict["seconds"] as? Double,
-      let timescale = dict["timescale"] as? CMTimeScale
-    else {
-      os_log("no time for: { %@, %@ }", log: log, type: .debug, uid, k)
-      return nil
-    }
-
-    return CMTime(seconds: seconds, preferredTimescale: timescale)
-  }
-
-  private static func timestamp() -> TimeInterval {
-    return Date().timeIntervalSince1970
-  }
-
-  public func set(_ time: CMTime, for uid: String) {
-    let seconds = time.seconds as NSNumber
-    let timescale = time.timescale as NSNumber
-    let ts = TimeRepository.timestamp() as NSNumber
-
-    var dict = [NSString : NSNumber]()
-    dict["seconds"] = seconds
-    dict["timescale"] = timescale
-    dict["ts"] = ts
-
-    let k = TimeRepository.key(from: uid)
-    store.set(dict, forKey: k)
-
-    os_log("set time: { %@: %@ }", log: log, type: .debug, uid, seconds)
-
-    vacuum()
-  }
-
-  public func removeTime(for uid: String) {
-    os_log("removing time: %@", log: log, type: .debug, uid)
-    store.removeObject(forKey: TimeRepository.key(from: uid))
-  }
+extension TimeRepository {
 
   /// Removes oldest 256 objects from store to create space for new ones.
   /// Remember that the objects, of course, need to be timestamped.
@@ -95,14 +52,16 @@ public final class TimeRepository: NSObject, Times {
 
     let timestampsByKeys = items.reduce([String : TimeInterval]()) { acc, item in
       let k = item.key
+      
       guard
         let v = item.value as? [NSString : NSNumber],
-        let ts = v["ts"] as? TimeInterval
-        else {
+        let ts = v["ts"] as? TimeInterval else {
         return acc
       }
+      
       var tmp = acc
       tmp[k] = ts
+      
       return tmp
     }
 
@@ -110,7 +69,7 @@ public final class TimeRepository: NSObject, Times {
     // timestamps, which are none of our business.
 
     guard timestampsByKeys.count > TimeRepository.threshold else {
-      return os_log("sufficient key space", log: log, type: .debug)
+      return
     }
 
     os_log("removing objects from the shared iCloud key-value store", log: log)
@@ -122,5 +81,59 @@ public final class TimeRepository: NSObject, Times {
     for object in objects {
       store.removeObject(forKey: object.key)
     }
+  }
+}
+
+// MARK: - Times
+
+extension TimeRepository: Times {
+
+  /// Returns the timestamp matching `uid`, our intermediate format.
+  func timestamp(key: Key) -> Timestamp? {
+    guard let dict = store.dictionary(forKey: String(key.hash)) else {
+      unplayedByUIDs.insert(key.hash)
+      return nil
+    }
+    
+    unplayedByUIDs.remove(key.hash)
+    
+    return Timestamp(dict: dict)
+  }
+
+  public func time(uid: String) -> CMTime {
+    guard let ts = timestamp(key: Key(uid: uid)) else {
+      return CMTime()
+    }
+    
+    return CMTime(seconds: ts.seconds, preferredTimescale: ts.timescale)
+  }
+  
+  public func set(_ time: CMTime, for uid: String) {    
+    guard let ts = Timestamp(time: time) else {
+      os_log("removing invalid time: %{public}@", log: log, uid)
+      
+      return removeTime(for: uid)
+    }
+    
+    let key = Key(uid: uid)
+    
+    store.set(ts.dictionary, forKey: String(key.hash))
+    vacuum()
+  }
+
+  public func removeTime(for uid: String) {
+    let key = Key(uid: uid)
+  
+    store.removeObject(forKey: String(key.hash))
+  }
+
+  public func isUnplayed(uid: String) -> Bool {
+    let key = Key(uid: uid)
+    
+    guard !unplayedByUIDs.contains(key.hash) else {
+      return true
+    }
+
+    return timestamp(key: key) == nil
   }
 }

@@ -24,7 +24,6 @@ public enum PlaybackError: Error {
 }
 
 extension PlaybackError: Equatable {
-  
   public static func == (lhs: PlaybackError, rhs: PlaybackError) -> Bool {
     switch (lhs, rhs) {
     case (.unknown, .unknown),
@@ -45,7 +44,26 @@ extension PlaybackError: Equatable {
       return false
     }
   }
+}
+
+/// Stores playback timestamps.
+public protocol Times {  
   
+  /// Return the matching timestamp for `uid`.
+  func time(uid: String) -> CMTime
+  
+  /// Sets the `time` for `uid`. 
+  ///
+  /// Use `CMTime.indefinite` to tag the matching item as finished, meaning it
+  /// has been played all the way to the end. An invalid `time` removes the 
+  /// matching timestamp from the store.
+  func set(_ time: CMTime, for uid: String)
+  
+  /// Removes the matching timestamp.
+  func removeTime(for uid: String)
+  
+  /// Returns `true` if the matching item  has not been played.
+  func isUnplayed(uid: String) -> Bool
 }
 
 /// A callback interface implemented by playback users to receive information
@@ -68,7 +86,6 @@ public protocol PlaybackDelegate {
   
   /// Dismisses the video player.
   func dismissVideo()
-  
 }
 
 /// Playing back audio-visual media enclosed by `FeedKit.Entry`, forwarding
@@ -102,6 +119,8 @@ public protocol Playing {
   @discardableResult
   func backward() -> Bool
   
+  /// Returns `true` if the item matching `uid` has not been played before.
+  func isUnplayed(uid: String) -> Bool
 }
 
 /// The main conglomerate API of this module.
@@ -115,7 +134,6 @@ public protocol Playback: Playing, NSObjectProtocol {
   /// `AVPlayerViewController`, which sets its own remote commands, overwriting
   /// our remote commands.
   func reclaim()
-  
 }
 
 

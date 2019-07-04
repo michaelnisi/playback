@@ -10,8 +10,9 @@
 		4C6FB91420481084005C559E /* PlaybackSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C6FB91320481084005C559E /* PlaybackSession.swift */; };
 		4C6FB9212049151A005C559E /* fsm.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C6FB9202049151A005C559E /* fsm.swift */; };
 		4C6FB923204A7C19005C559E /* NowPlaying.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C6FB922204A7C19005C559E /* NowPlaying.swift */; };
+		4CAA526822C264F2003D9EBA /* TimestampTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CAA526722C264F2003D9EBA /* TimestampTests.swift */; };
+		4CAA526A22C267EE003D9EBA /* Timestamp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CAA526922C267EE003D9EBA /* Timestamp.swift */; };
 		4E5C0ED41EF13CAC00B090EF /* Playback.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4E5C0ECA1EF13CAC00B090EF /* Playback.framework */; };
-		4E5C0ED91EF13CAC00B090EF /* PlaybackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E5C0ED81EF13CAC00B090EF /* PlaybackTests.swift */; };
 		4E5C0EDB1EF13CAC00B090EF /* Playback.h in Headers */ = {isa = PBXBuildFile; fileRef = 4E5C0ECD1EF13CAC00B090EF /* Playback.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		4E5C0EE51EF1672C00B090EF /* Playback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E5C0EE41EF1672C00B090EF /* Playback.swift */; };
 		4E5C0F011EF2887F00B090EF /* remote.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E5C0F001EF2887F00B090EF /* remote.swift */; };
@@ -33,11 +34,12 @@
 		4C6FB91320481084005C559E /* PlaybackSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackSession.swift; sourceTree = "<group>"; };
 		4C6FB9202049151A005C559E /* fsm.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = fsm.swift; sourceTree = "<group>"; };
 		4C6FB922204A7C19005C559E /* NowPlaying.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlaying.swift; sourceTree = "<group>"; };
+		4CAA526722C264F2003D9EBA /* TimestampTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimestampTests.swift; sourceTree = "<group>"; };
+		4CAA526922C267EE003D9EBA /* Timestamp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Timestamp.swift; sourceTree = "<group>"; };
 		4E5C0ECA1EF13CAC00B090EF /* Playback.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Playback.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		4E5C0ECD1EF13CAC00B090EF /* Playback.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Playback.h; sourceTree = "<group>"; };
 		4E5C0ECE1EF13CAC00B090EF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		4E5C0ED31EF13CAC00B090EF /* PlaybackTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PlaybackTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		4E5C0ED81EF13CAC00B090EF /* PlaybackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackTests.swift; sourceTree = "<group>"; };
 		4E5C0EDA1EF13CAC00B090EF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		4E5C0EE41EF1672C00B090EF /* Playback.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Playback.swift; sourceTree = "<group>"; };
 		4E5C0F001EF2887F00B090EF /* remote.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = remote.swift; sourceTree = "<group>"; };
@@ -90,6 +92,7 @@
 				4E5C0ECD1EF13CAC00B090EF /* Playback.h */,
 				4E5C0ECE1EF13CAC00B090EF /* Info.plist */,
 				4E5C0EE41EF1672C00B090EF /* Playback.swift */,
+				4CAA526922C267EE003D9EBA /* Timestamp.swift */,
 				4C6FB91320481084005C559E /* PlaybackSession.swift */,
 				4C6FB9202049151A005C559E /* fsm.swift */,
 				4E5C0F001EF2887F00B090EF /* remote.swift */,
@@ -102,7 +105,7 @@
 		4E5C0ED71EF13CAC00B090EF /* PlaybackTests */ = {
 			isa = PBXGroup;
 			children = (
-				4E5C0ED81EF13CAC00B090EF /* PlaybackTests.swift */,
+				4CAA526722C264F2003D9EBA /* TimestampTests.swift */,
 				4E5C0EDA1EF13CAC00B090EF /* Info.plist */,
 			);
 			path = PlaybackTests;
@@ -229,6 +232,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4CAA526A22C267EE003D9EBA /* Timestamp.swift in Sources */,
 				4E5C0EE51EF1672C00B090EF /* Playback.swift in Sources */,
 				4C6FB9212049151A005C559E /* fsm.swift in Sources */,
 				4C6FB923204A7C19005C559E /* NowPlaying.swift in Sources */,
@@ -242,7 +246,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				4E5C0ED91EF13CAC00B090EF /* PlaybackTests.swift in Sources */,
+				4CAA526822C264F2003D9EBA /* TimestampTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -308,7 +312,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 11.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 11.4;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
@@ -366,7 +370,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 11.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 11.4;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = iphoneos;
 				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
