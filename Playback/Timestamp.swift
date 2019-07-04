@@ -9,7 +9,7 @@
 import Foundation
 import AVFoundation
 
-/// The playback status of an AV item.
+/// The timely playback status of an AV item.
 public struct Timestamp: Hashable, Codable {
   
   /// Contextual information of a timestamp.
