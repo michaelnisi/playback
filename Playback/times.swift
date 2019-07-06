@@ -12,6 +12,7 @@ import os.log
 
 public final class TimeRepository: NSObject {
   
+  /// Identifies a time.
   struct Key: Hashable {
     let uid: String
     
@@ -25,6 +26,7 @@ public final class TimeRepository: NSObject {
     }
   }
   
+  /// The shared time respository.
   public static let shared = TimeRepository()
 
   private lazy var store = NSUbiquitousKeyValueStore.default
@@ -33,7 +35,7 @@ public final class TimeRepository: NSObject {
   /// older 256 keys.
   static let threshold = 512
   
-  /// In-memory cache for making this faster.
+  /// Fast access cache of unplayed UIDs.
   private var unplayedByUIDs = Set<Int32>()
 }
 
@@ -65,14 +67,14 @@ extension TimeRepository {
       return tmp
     }
 
-    // Checking the count again, because there might have been objects without
+    // Checking the count again, for there might have been objects without
     // timestamps, which are none of our business.
 
     guard timestampsByKeys.count > TimeRepository.threshold else {
       return
     }
 
-    os_log("removing objects from the shared iCloud key-value store", log: log)
+    os_log("making space in synced defaults", log: log)
 
     let objects = timestampsByKeys.sorted {
       $0.value > $1.value
@@ -116,8 +118,10 @@ extension TimeRepository: Times {
     }
     
     let key = Key(uid: uid)
-    
+     
     store.set(ts.dictionary, forKey: String(key.hash))
+    unplayedByUIDs.remove(key.hash)
+    
     vacuum()
   }
 
