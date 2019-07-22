@@ -83,9 +83,6 @@ public protocol PlaybackDelegate {
   
   /// Returns the previous item.
   func previousItem() -> Entry?
-  
-  /// Dismisses the video player.
-  func dismissVideo()
 }
 
 /// Playing back audio-visual media enclosed by `FeedKit.Entry`, forwarding
@@ -121,6 +118,9 @@ public protocol Playing {
   
   /// Returns `true` if the item matching `uid` has not been played before.
   func isUnplayed(uid: String) -> Bool
+  
+  /// Returns `true` if an item matching `guid` is currently playing.
+  func isPlaying(guid: EntryGUID) -> Bool
 }
 
 /// The main conglomerate API of this module.

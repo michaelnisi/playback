@@ -361,7 +361,6 @@ public final class PlaybackSession: NSObject, Playback {
   func makeAVPlayer(url: URL? = nil) -> AVPlayer? {
     if let prev = player?.currentItem {
       removeObservers(item: prev)
-      delegate?.dismissVideo()
     }
 
     guard let url = url else {
@@ -763,6 +762,16 @@ extension PlaybackSession {
 // MARK: - Playing
 
 extension PlaybackSession: Playing {
+  
+  public func isPlaying(guid: EntryGUID) -> Bool {
+    switch state {
+    case .listening(let entry),
+         .viewing(let entry, _):
+      return entry.guid == guid
+    case .inactive, .paused, .preparing:
+      return false
+    }
+  }
   
   public func isUnplayed(uid: String) -> Bool {
     guard currentEntry?.enclosure?.url != uid else {
