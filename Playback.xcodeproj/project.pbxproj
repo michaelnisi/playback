@@ -193,11 +193,11 @@
 			};
 			buildConfigurationList = 4E5C0EC41EF13CAC00B090EF /* Build configuration list for PBXProject "Playback" */;
 			compatibilityVersion = "Xcode 3.2";
-			developmentRegion = English;
+			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
-				English,
 				en,
+				Base,
 			);
 			mainGroup = 4E5C0EC01EF13CAC00B090EF;
 			productRefGroup = 4E5C0ECB1EF13CAC00B090EF /* Products */;
