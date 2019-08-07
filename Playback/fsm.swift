@@ -59,9 +59,9 @@ public enum PlaybackState: Equatable {
         }
       }
     }()
+    
     self = .paused(entry, playbackError)
   }
-  
 }
 
 extension PlaybackState: CustomStringConvertible {
@@ -80,7 +80,6 @@ extension PlaybackState: CustomStringConvertible {
       return "PlaybackState: viewing: \(s)"
     }
   }
-  
 }
 
 // MARK: - PlaybackEvent
@@ -128,5 +127,4 @@ extension PlaybackEvent: CustomStringConvertible {
       return "PlaybackEvent: scrub: \(position)"
     }
   }
-  
 }

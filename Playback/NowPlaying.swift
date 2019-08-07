@@ -32,17 +32,11 @@ public struct NowPlaying {
       MPMediaItemPropertyTitle: entry.title
     ]
     
-    let boundsSize = CGSize(width: 600, height: 600)
-
-    let artwork = MPMediaItemArtwork(boundsSize: boundsSize) { size in
-      guard let img = ImageRepository.shared
-        .loadImage(item: entry, size: size) else {
-        return #imageLiteral(resourceName: "Oval")
-      }
-      return img
+    info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(
+      boundsSize: CGSize(width: 600, height: 600)) { size in
+      return ImageRepository.shared.cachedImage(item: entry, size: size) ?? #imageLiteral(resourceName: "Oval")
     }
     
-    info[MPMediaItemPropertyArtwork] = artwork
     info[MPNowPlayingInfoPropertyExternalContentIdentifier] = entry.guid
     info[MPNowPlayingInfoPropertyMediaType] = 1
     

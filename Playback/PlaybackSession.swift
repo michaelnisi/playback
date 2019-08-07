@@ -39,10 +39,11 @@ public final class PlaybackSession: NSObject, Playback {
   /// - Parameter times: A repository for storing times (per URL).
   public init(times: Times) {
     self.times = times
+    
     super.init()
   }
 
-  public var delegate: PlaybackDelegate?
+  weak public var delegate: PlaybackDelegate?
 
   // MARK: Internals
 
@@ -134,7 +135,7 @@ public final class PlaybackSession: NSObject, Playback {
   }
 
   /// Sets the playback time to previous for `entry`.
-  public func seek(_ entry: Entry, playing: Bool, position: TimeInterval? = nil) -> PlaybackState {
+  public func seek(_ entry: Entry, playing: Bool, position: TimeInterval? = nil) -> PlaybackState {    
     guard
       let player = self.player,
       let enclosure = entry.enclosure,
@@ -146,6 +147,7 @@ public final class PlaybackSession: NSObject, Playback {
       guard playing else {
         return .paused(entry, nil)
       }
+      
       return PlaybackSession.isVideo(tracks: tracks, type: enclosure.type)
         ? .viewing(entry, player)
         : .listening(entry)
@@ -153,28 +155,23 @@ public final class PlaybackSession: NSObject, Playback {
     
     guard let time = startTime(
       item: player.currentItem, url: enclosure.url, position: position) else {
-      if playing {
-        player.play()
-      }
+      if playing { player.play() }
+        
       return newState
     }
     
-    player.currentItem?.cancelPendingSeeks()
-    
-    player.seek(to: time) { finished in
+    player.seek(to: time) { [weak self] finished in
       guard finished else {
         return
       }
 
       // Saving successfully seeked time positions.
       if position != nil {
-        self.setCurrentTime()
+        self?.setCurrentTime()
       }
 
       DispatchQueue.main.async {
-        if playing {
-          player.play()
-        }
+        if playing { player.play() }
         NowPlaying.set(entry: entry, player: player)
       }
     }
@@ -191,7 +188,7 @@ public final class PlaybackSession: NSObject, Playback {
   }
 
   // The context for player item key-value observation.
-  private var playerItemContext = 0
+  private var playerItemContext = UUID()
 
   private func onTracksChange(_ change: [NSKeyValueChangeKey : Any]?) {
     guard let tracks = change?[.newKey] as? [AVPlayerItemTrack] else {
@@ -318,14 +315,12 @@ public final class PlaybackSession: NSObject, Playback {
                        context: &playerItemContext)
     }
 
-    let nc = NotificationCenter.default
-
-    nc.addObserver(self,
+    NotificationCenter.default.addObserver(self,
                    selector: #selector(onItemDidPlayToEndTime),
                    name: .AVPlayerItemDidPlayToEndTime,
                    object: item)
 
-    nc.addObserver(self,
+    NotificationCenter.default.addObserver(self,
                    selector: #selector(onItemNewErrorLogEntry),
                    name: .AVPlayerItemNewErrorLogEntry,
                    object: item)
@@ -339,28 +334,30 @@ public final class PlaybackSession: NSObject, Playback {
       #keyPath(AVPlayerItem.tracks),
       #keyPath(AVPlayerItem.duration)
     ]
+    
     for keyPath in keyPaths {
       item.removeObserver(self, forKeyPath: keyPath, context: &playerItemContext)
     }
 
-    let nc = NotificationCenter.default
     let names: [NSNotification.Name] = [
       .AVPlayerItemDidPlayToEndTime,
       .AVPlayerItemNewErrorLogEntry
     ]
+    
     for name in names {
-      nc.removeObserver(self, name: name, object: item)
+      NotificationCenter.default.removeObserver(self, name: name, object: item)
     }
   }
 
   // The context for player key-value observation.
-  private var playerContext = 0
+  private var playerContext = UUID()
 
   /// Passing `nil` as `url` dismisses the current player and returns `nil`.
   @discardableResult private
   func makeAVPlayer(url: URL? = nil) -> AVPlayer? {
     if let prev = player?.currentItem {
       removeObservers(item: prev)
+      prev.cancelPendingSeeks()
     }
 
     guard let url = url else {
@@ -485,8 +482,8 @@ public final class PlaybackSession: NSObject, Playback {
   
   /// Submits a block pausing our player on the main queue.
   private func pausePlayer() {
-    DispatchQueue.main.async {
-      self.player?.pause()
+    DispatchQueue.main.async { [weak self] in
+      self?.player?.pause()
     }
   }
 
@@ -908,5 +905,4 @@ extension PlaybackSession: Playing {
 
     return true
   }
-
 }

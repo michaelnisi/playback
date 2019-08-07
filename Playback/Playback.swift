@@ -68,7 +68,7 @@ public protocol Times {
 
 /// A callback interface implemented by playback users to receive information
 /// about the playback session state.
-public protocol PlaybackDelegate {
+public protocol PlaybackDelegate: class {
 
   /// Returns a local or remote URL for `url`. One might return `nil` to signal
   /// that the URL is not reachable, implying that the returned URL must be
