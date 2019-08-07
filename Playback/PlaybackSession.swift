@@ -444,7 +444,7 @@ public final class PlaybackSession: NSObject, Playback {
     times.set(t, for: url)
   }
 
-  private var state = PlaybackState.inactive(nil, true) {
+  private var state = PlaybackState.inactive(nil) {
     didSet {
       os_log("new state: %{public}@, old state: %{public}@",
              log: log, type: .info,
@@ -457,7 +457,7 @@ public final class PlaybackSession: NSObject, Playback {
         }
 
         switch state {
-        case .paused(_, let error), .inactive(let error, _):
+        case .paused(_, let error), .inactive(let error):
           return error != nil
         default:
           return false
@@ -491,7 +491,7 @@ public final class PlaybackSession: NSObject, Playback {
     os_log("handling event: %{public}@", log: log, type: .info, e.description)
 
     switch state {
-    case .inactive(let fault, let resuming):
+    case .inactive(let fault):
       // MARK: inactive
       guard fault == nil else {
         os_log("unresolved error while inactive: %{public}@",
@@ -507,13 +507,13 @@ public final class PlaybackSession: NSObject, Playback {
         do {
           try activate()
         } catch {
-          return state = .inactive(.session, resuming)
+          return state = .inactive(.session)
         }
-        return state = prepare(newEntry, playing: resuming)
+        return state = prepare(newEntry, playing: false)
 
       case .resume:
         os_log("** resume before change event while inactive", log: log)
-        return state = .inactive(fault, true)
+        return state = .inactive(fault)
 
       case .error, .end, .paused, .playing, .ready, .video,
            .toggle, .pause, .scrub:
@@ -745,9 +745,9 @@ extension PlaybackSession {
     do {
       try AVAudioSession.sharedInstance().setActive(false)
     } catch {
-      return .inactive(.session, false)
+      return .inactive(.session)
     }
-    return .inactive(nil, false)
+    return .inactive(nil)
   }
 
   public func reclaim() {

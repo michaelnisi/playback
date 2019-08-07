@@ -18,14 +18,15 @@ public enum PlaybackState: Equatable {
   /// Decides if we should try to resume playback when leaving this state.
   public typealias Resuming = Bool
   
-  /// The session is inactive.
-  case inactive(PlaybackError?, Resuming)
+  /// The session is inactive, maybe due to an error.
+  case inactive(PlaybackError?)
 
-  // TODO: Consider putting AVPlayerItem in following (playing) states
+  // We should separate player and item to support AirPlay for audio AND video.
   //
-  // We have to separate player and item to support AirPlay for audio AND video.
-  // I think, the key to accomplish this might be understanding the player as
-  // ephemeral object, part of our actual state, though, is the item.
+  // The key for accomplishing this might be to consider the player as ephemeral 
+  // object, the item however is part of our actual state.
+  //
+  // TODO: Consider keeping AVPlayerItem in following states:
 
   /// The current item has been paused.
   case paused(Entry, PlaybackError?)
@@ -68,8 +69,8 @@ extension PlaybackState: CustomStringConvertible {
   
   public var description: String {
     switch self {
-    case .inactive(let s):
-      return "PlaybackState: inactive: \(s)"
+    case .inactive(let error):
+      return "PlaybackState: inactive: \(String(describing: error))"
     case .listening(let s):
       return "PlaybackState: listening: \(s)"
     case .paused(let s):
