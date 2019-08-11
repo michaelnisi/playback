@@ -34,7 +34,7 @@ public struct NowPlaying {
     
     info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(
       boundsSize: CGSize(width: 600, height: 600)) { size in
-      return ImageRepository.shared.cachedImage(item: entry, size: size) ?? #imageLiteral(resourceName: "Oval")
+      return ImageRepository.shared.cachedImage(representing: entry, at: size) ?? #imageLiteral(resourceName: "Oval")
     }
     
     info[MPNowPlayingInfoPropertyExternalContentIdentifier] = entry.guid
