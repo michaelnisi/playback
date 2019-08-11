@@ -93,16 +93,13 @@ public protocol Playing {
   /// The currently playing item.
   var currentEntry: Entry? { get }
   
-  /// Sets the current entry. Use `resume` to actually start playing.
-  func setCurrentEntry(_ newValue: Entry?)
-  
-  /// Resumes playing the current item from its previous position.
+  /// Resumes playing `entry` or the current item from its previous position.
   @discardableResult
-  func resume() -> Bool
+  func resume(entry: Entry?) -> Bool
   
-  /// Pauses playback of the current item.
+  /// Pauses playback of `entry` or the current item.
   @discardableResult
-  func pause() -> Bool
+  func pause(entry: Entry?) -> Bool
   
   /// Toggles between playing and pausing the current item.
   @discardableResult

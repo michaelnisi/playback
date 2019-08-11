@@ -83,11 +83,48 @@ extension PlaybackState: CustomStringConvertible {
   }
 }
 
+extension PlaybackState {
+  
+  var isOK: Bool {
+    switch self {
+    case .paused(_, let error):
+      return error == nil
+    case .preparing, .listening, .viewing:
+      return true
+    case .inactive:
+      return false
+    }
+  }
+  
+  var shouldResume: Bool {
+    switch self {
+    case .paused, .inactive:
+      return false
+    case .listening, .viewing:
+      return true
+    case .preparing(_, let resuming):
+      return resuming
+    }
+  }
+  
+  var entry: Entry? {
+    switch self {
+    case .preparing(let entry, _),
+         .listening(let entry),
+         .viewing(let entry, _),
+         .paused(let entry, _):
+      return entry
+    case .inactive:
+      return nil
+    }
+  }
+}
+
 // MARK: - PlaybackEvent
 
 /// Enumerates events of the playback FSM.
 enum PlaybackEvent {
-  case change(Entry?)
+  case change(Entry?, Bool)
   case end
   case error(PlaybackError)
   case paused
@@ -104,8 +141,8 @@ extension PlaybackEvent: CustomStringConvertible {
   
   var description: String {
     switch self {
-    case .change(let entry):
-      return "PlaybackEvent: change: \(String(describing: entry))"
+    case .change(let entry, let resuming):
+      return "PlaybackEvent: change: ( \(String(describing: entry)),  \(resuming) )"
     case .resume:
       return "PlaybackEvent: resume"
     case .pause:
