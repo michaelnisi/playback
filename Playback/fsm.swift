@@ -71,14 +71,14 @@ extension PlaybackState: CustomStringConvertible {
     switch self {
     case .inactive(let error):
       return "PlaybackState: inactive: \(String(describing: error))"
-    case .listening(let s):
-      return "PlaybackState: listening: \(s)"
-    case .paused(let s):
-      return "PlaybackState: paused: \(s)"
-    case .preparing(let s):
-      return "PlaybackState: preparing: \(s)"
-    case .viewing(let s):
-      return "PlaybackState: viewing: \(s)"
+    case .listening(let entry):
+      return "PlaybackState: listening: \(entry)"
+    case .paused(let entry, let error):
+        return "PlaybackState: paused: \(entry), \(String(describing: error))"
+    case .preparing(let entry, let isResuming):
+      return "PlaybackState: preparing: \(entry), \(isResuming)"
+    case .viewing(let entry, let player):
+      return "PlaybackState: viewing: \(entry), \(player)"
     }
   }
 }
