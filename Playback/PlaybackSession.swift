@@ -715,7 +715,6 @@ public final class PlaybackSession: NSObject, Playback {
 
   private func event(_ e: PlaybackEvent) {
     sQueue.sync {
-      // Just saving an indentation in the big switch above.
       updateState(e)
     }
   }
@@ -731,7 +730,7 @@ extension PlaybackSession {
 
     let s = AVAudioSession.sharedInstance()
 
-    try s.setCategory(.playback, mode: .spokenAudio, policy: .longForm)
+    try s.setCategory(.playback, mode: .spokenAudio, policy: .longFormAudio)
     try s.setActive(true)
 
     addRemoteCommandTargets()
