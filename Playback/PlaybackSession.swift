@@ -83,11 +83,7 @@ public final class PlaybackSession: NSObject, Playback {
     }
 
     for v in seekableTimeRanges {
-      guard let tr = v as? CMTimeRange else {
-        continue
-      }
-
-      if tr.containsTime(time) {
+      if v.timeRangeValue.containsTime(time) {
         return time
       }
     }
@@ -123,7 +119,7 @@ public final class PlaybackSession: NSObject, Playback {
       CMTime(seconds: position!, preferredTimescale: 1000000)
 
     guard let st = PlaybackSession.seekableTime(t, within: seekableTimeRanges) else {
-      guard let r = seekableTimeRanges.first as? CMTimeRange else {
+      guard let r = seekableTimeRanges.first?.timeRangeValue else {
         return nil
       }
       return r.start
