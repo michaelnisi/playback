@@ -13,6 +13,7 @@
 *.xccheckout
 *.xcuserstate
 *.xcworkspace
+.build
 DerivedData
 build/
 xcuserdata
