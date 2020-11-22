@@ -13,11 +13,13 @@ let package = Package(
       targets: ["Playback"]),
   ],
   dependencies: [
+    .package(name: "FeedKit", url: "https://github.com/michaelnisi/feedkit", from: "17.0.0"),
+    .package(name: "Nuke", url: "https://github.com/kean/nuke", from: "9.0.0")
   ],
   targets: [
     .target(
       name: "Playback",
-      dependencies: []),
+      dependencies: ["FeedKit", "Nuke"]),
     .testTarget(
       name: "PlaybackTests",
       dependencies: ["Playback"]),

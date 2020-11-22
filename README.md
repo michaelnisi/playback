@@ -35,9 +35,9 @@ Audiovisual playback is asynchronous, a combination of IO and user events. Inter
 - listening
 - viewing
 
-## Installation
+## Install
 
-Integrate Playback into your Xcode workspace.
+📦 Add `https://github.com/michaelnisi/playback`  to your package manifest.
 
 ## License
 
