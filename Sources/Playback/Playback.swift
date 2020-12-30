@@ -17,25 +17,78 @@ public enum MediaType: UInt {
 }
 
 public struct NowPlayingInfo {
-  let assetURL: String
-  let mediaType: MediaType
-  let rate: Float
-  let duration: Double
-  let time: Double
+  
+  public let assetURL: String
+  public let mediaType: MediaType
+  public let rate: Float
+  public let duration: Double
+  public let time: Double
+  
+  public init(
+    assetURL: String,
+    mediaType: MediaType,
+    rate: Float,
+    duration: Double,
+    time: Double
+  ) {
+    self.assetURL = assetURL
+    self.mediaType = mediaType
+    self.rate = rate
+    self.duration = duration
+    self.time = time
+  }
+  
+  public var isPlaying: Bool {
+    rate != .zero
+  }
 }
 
 public struct ImageURLs {
-  let small: String
-  let medium: String
-  let large: String
+  
+  public let guid: PlaybackItem.Identifier
+  public let small: String
+  public let medium: String
+  public let large: String
+  
+  public init(
+    guid: PlaybackItem.Identifier,
+    small: String,
+    medium: String,
+    large: String
+  ) {
+    self.guid = guid
+    self.small = small
+    self.medium = medium
+    self.large = large
+  }
 }
 
-public struct PlaybackItem {
-  let guid: String
-  let title: String
-  let subtitle: String
-  let imageURLs: ImageURLs
-  let nowPlaying: NowPlayingInfo?
+public struct PlaybackItem: Identifiable {
+
+  public typealias Identifier = String
+  
+  public init(
+    id: Identifier,
+    url: String,
+    title: String,
+    subtitle: String,
+    imageURLs: ImageURLs,
+    nowPlaying: NowPlayingInfo? = nil
+  ) {
+    self.id = id
+    self.url = url
+    self.title = title
+    self.subtitle = subtitle
+    self.imageURLs = imageURLs
+    self.nowPlaying = nowPlaying
+  }
+  
+  public let id: Identifier
+  public let url: String
+  public let title: String
+  public let subtitle: String
+  public let imageURLs: ImageURLs
+  public let nowPlaying: NowPlayingInfo?
 }
 
 /// Enumerates playback errors.
@@ -50,6 +103,7 @@ public enum PlaybackError: Error {
 }
 
 extension PlaybackError: Equatable {
+  
   public static func == (lhs: PlaybackError, rhs: PlaybackError) -> Bool {
     switch (lhs, rhs) {
     case (.unknown, .unknown),
