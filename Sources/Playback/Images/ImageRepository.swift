@@ -9,8 +9,8 @@
 import Foundation
 import Nuke
 import os.log
-import UIKit
 import FeedKit
+import UIKit
 
 /// Provides processed images as fast as possible.
 public final class ImageRepository {

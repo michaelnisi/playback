@@ -10,7 +10,33 @@ import AVFoundation
 import AVKit
 import Foundation
 import os.log
-import FeedKit
+import FeedKit // 🗑
+
+public enum MediaType: UInt {
+  case none, audio, video
+}
+
+public struct NowPlayingInfo {
+  let assetURL: String
+  let mediaType: MediaType
+  let rate: Float
+  let duration: Double
+  let time: Double
+}
+
+public struct ImageURLs {
+  let small: String
+  let medium: String
+  let large: String
+}
+
+public struct PlaybackItem {
+  let guid: String
+  let title: String
+  let subtitle: String
+  let imageURLs: ImageURLs
+  let nowPlaying: NowPlayingInfo?
+}
 
 /// Enumerates playback errors.
 public enum PlaybackError: Error {
