@@ -20,7 +20,7 @@ public enum ImageQuality: CGFloat {
   case low = 4
 }
 
-public struct ImageURLs: Equatable, Identifiable{
+public struct ImageURLs: Equatable, Identifiable {
   
   public typealias ID = Int
   

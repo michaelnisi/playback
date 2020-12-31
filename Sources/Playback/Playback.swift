@@ -11,31 +11,32 @@ import AVKit
 import Foundation
 import os.log
 
-public enum MediaType: UInt {
-  case none, audio, video
+/// State of a media asset.
+public struct AssetState {
   
-  var isVideo: Bool {
-    self == .video
+  public enum Medium: UInt {
+    case none, audio, video
+    
+    var isVideo: Bool {
+      self == .video
+    }
   }
-}
 
-public struct NowPlayingInfo {
-  
-  public let assetURL: String
-  public let mediaType: MediaType
+  public let url: String
+  public let medium: Medium
   public let rate: Float
   public let duration: Double
   public let time: Double
   
   public init(
-    assetURL: String,
-    mediaType: MediaType,
+    url: String,
+    medium: Medium,
     rate: Float,
     duration: Double,
     time: Double
   ) {
-    self.assetURL = assetURL
-    self.mediaType = mediaType
+    self.url = url
+    self.medium = medium
     self.rate = rate
     self.duration = duration
     self.time = time
@@ -46,6 +47,7 @@ public struct NowPlayingInfo {
   }
 }
 
+/// `PlaybackItem` requests playback and represents a currently playing or paused item.
 public struct PlaybackItem: Identifiable, Equatable {
     
   public typealias ID = String
@@ -55,8 +57,9 @@ public struct PlaybackItem: Identifiable, Equatable {
   public let title: String
   public let subtitle: String
   public let imageURLs: ImageURLs
-  public let proclaimedMediaType: MediaType
-  public let nowPlaying: NowPlayingInfo?
+  public let proclaimedMediaType: AssetState.Medium
+  
+  public let nowPlaying: AssetState?
   
   public init(
     id: ID,
@@ -64,8 +67,27 @@ public struct PlaybackItem: Identifiable, Equatable {
     title: String,
     subtitle: String,
     imageURLs: ImageURLs,
-    proclaimedMediaType: MediaType,
-    nowPlaying: NowPlayingInfo? = nil
+    proclaimedMediaType: AssetState.Medium
+  ) {
+    self.init(
+      id: id,
+      url: url,
+      title: title,
+      subtitle: subtitle,
+      imageURLs: imageURLs,
+      proclaimedMediaType: proclaimedMediaType,
+      nowPlaying: nil
+    )
+  }
+  
+  init(
+    id: ID,
+    url: String,
+    title: String,
+    subtitle: String,
+    imageURLs: ImageURLs,
+    proclaimedMediaType: AssetState.Medium,
+    nowPlaying: AssetState?
   ) {
     self.id = id
     self.url = url
@@ -163,13 +185,13 @@ public protocol Playing {
   /// The currently playing item.
   var currentEntry: PlaybackItem? { get }
   
-  /// Resumes playing `entry` or the current item from its previous position.
+  /// Resumes playing `entry` or the current item from its previous position or from `time`.
   @discardableResult
-  func resume(entry: PlaybackItem?, time: Double?) -> Bool
+  func resume(entry: PlaybackItem?, from time: Double?) -> Bool
   
-  /// Pauses playback of `entry` or the current item.
+  /// Pauses playback of `entry` or the current item at `time`.
   @discardableResult
-  func pause(entry: PlaybackItem?) -> Bool
+  func pause(entry: PlaybackItem?, at time: Double?) -> Bool
   
   /// Toggles between playing and pausing the current item.
   @discardableResult

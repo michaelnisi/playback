@@ -108,7 +108,9 @@ public final class PlaybackSession: NSObject, Playback {
     return CMTimeSubtract(t, CMTime(seconds: 5, preferredTimescale: t.timescale))
   }
 
-  private func startTime(item: AVPlayerItem?, url: String, position: TimeInterval? = nil) -> CMTime? {
+  private func startTime(
+    item: AVPlayerItem?, url: String, position: TimeInterval? = nil
+  ) -> CMTime? {
     guard let seekableTimeRanges = item?.seekableTimeRanges else {
       return nil
     }
@@ -128,7 +130,9 @@ public final class PlaybackSession: NSObject, Playback {
   }
 
   /// Sets the playback time to previous for `entry`.
-  public func seek(_ entry: PlaybackItem, playing: Bool, position: TimeInterval? = nil) -> PlaybackState {    
+  public func seek(
+    _ entry: PlaybackItem, playing: Bool, position: TimeInterval? = nil
+  ) -> PlaybackState {
     guard
       let player = self.player,
       let tracks = player.currentItem?.tracks, !tracks.isEmpty else {
@@ -172,7 +176,7 @@ public final class PlaybackSession: NSObject, Playback {
   }
 
   private static func isVideo(
-    tracks: [AVPlayerItemTrack], type: MediaType) -> Bool {
+    tracks: [AVPlayerItemTrack], type: AssetState.Medium) -> Bool {
     let containsVideo = tracks.contains {
       $0.assetTrack?.mediaType == .video
     }
@@ -809,8 +813,9 @@ extension PlaybackSession: Playing {
     return true
   }
 
+  // TODO: Resume from time
   @discardableResult
-  public func resume(entry: PlaybackItem? = nil, time: Double? = nil) -> Bool {
+  public func resume(entry: PlaybackItem? = nil, from time: Double? = nil) -> Bool {
     incoming.async {
       entry == nil ? self.event(.resume) : self.event(.change(entry!, true))
       
@@ -823,8 +828,9 @@ extension PlaybackSession: Playing {
     return true
   }
 
+  // TODO: Pause at time
   @discardableResult
-  public func pause(entry: PlaybackItem? = nil) -> Bool {
+  public func pause(entry: PlaybackItem? = nil, at time: Double? = nil) -> Bool {
     incoming.async {
       entry == nil ? self.event(.pause) : self.event(.change(entry!, false))
       

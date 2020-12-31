@@ -39,7 +39,7 @@ public struct NowPlaying {
     info[MPNowPlayingInfoPropertyExternalContentIdentifier] = entry.id
     info[MPNowPlayingInfoPropertyMediaType] = 1
     
-    if let assetURLString = entry.nowPlaying?.assetURL, let url = URL(string: assetURLString) {
+    if let assetURLString = entry.nowPlaying?.url, let url = URL(string: assetURLString) {
       info[MPNowPlayingInfoPropertyAssetURL] = url
     }
     
