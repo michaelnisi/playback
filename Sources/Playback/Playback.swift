@@ -155,7 +155,7 @@ public protocol PlaybackDelegate: class {
   func previousItem() -> PlaybackItem?
 }
 
-/// Playing back audio-visual media enclosed by `FeedKit.Entry`, forwarding
+/// Playing back audio-visual media enclosed by `PlaybackItem`, forwarding
 /// information to `MediaPlayer` default now playing info center.
 /// Additionally, implementors should persist play times across devices.
 public protocol Playing {

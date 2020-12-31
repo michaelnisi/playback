@@ -9,7 +9,6 @@
 import Foundation
 import Nuke
 import os.log
-import FeedKit
 import UIKit
 
 /// Provides processed images as fast as possible.
@@ -53,7 +52,7 @@ public final class ImageRepository {
   ///
   /// - Parameter removing: Clears the cache (for development).
   private static func makeImagePipeline(removing: Bool = false) -> ImagePipeline {
-    let name = "ink.codes.feedkit.images"
+    let name = "ink.codes.playback.images"
     
     if removing {
       do {
@@ -82,7 +81,7 @@ public final class ImageRepository {
   private var urls = NSCache<NSString, NSURL>()
   
   /// Hi-res images of these feeds have been preloaded.
-  var preloadedImages = Set<String>()
+  var preloadedImages = Set<Int>()
 }
 
 // MARK: - Choosing and Caching URLs
@@ -510,7 +509,7 @@ extension ImageRepository {
       return diff.contains($0.id)
     }
     
-    let preloading: [String] = needed.compactMap {
+    let preloading: [Int] = needed.compactMap {
       let id = $0.id
       
       guard !preloadedImages.contains(id), let url = imageURL(representing: $0, at: size) else {

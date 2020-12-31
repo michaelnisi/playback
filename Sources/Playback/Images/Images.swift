@@ -20,16 +20,18 @@ public enum ImageQuality: CGFloat {
   case low = 4
 }
 
-public struct ImageURLs {
+public struct ImageURLs: Equatable, Identifiable{
   
-  public let id: PlaybackItem.ID
+  public typealias ID = Int
+  
+  public let id: ID
   public let title: String
   public let small: String
   public let medium: String
   public let large: String
   
   public init(
-    id: PlaybackItem.ID,
+    id: ID,
     title: String,
     small: String,
     medium: String,

@@ -1,6 +1,6 @@
 # Playback
 
-The Playback Swift package for iOS is the audiovisual counterpart of [FeedKit](https://github.com/michaelnisi/feedkit) for playing audio and video. It manages a playback session, plays audio and video, integrates with [Remote Command Center](https://developer.apple.com/documentation/mediaplayer/remote_command_center_events), and persists playback times using [NSUbiquitousKeyValueStore](https://developer.apple.com/documentation/foundation/nsubiquitouskeyvaluestore).
+The Playback Swift package for iOS plays audio and video. It manages a playback session, plays audio and video, integrates with [Remote Command Center](https://developer.apple.com/documentation/mediaplayer/remote_command_center_events), and persists playback times using [NSUbiquitousKeyValueStore](https://developer.apple.com/documentation/foundation/nsubiquitouskeyvaluestore).
 
 Playback is used in the [Podest](https://github.com/michaelnisi/podest) podcast app.
 
@@ -12,7 +12,7 @@ Two protocols form the core surface of Playback.
 protocol Playback
 ```
 
-A `Playback` implementation is provided by the framework. It lets you play, pause, and resume `FeedKit.Entry` objects.
+A `Playback` implementation is provided by the framework. It lets you play, pause, and resume `PlaybackItem` objects.
 
 ```swift
 protocol PlaybackDelegate

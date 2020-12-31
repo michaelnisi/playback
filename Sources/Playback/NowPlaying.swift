@@ -9,7 +9,6 @@
 import Foundation
 import MediaPlayer
 import AVKit
-import FeedKit
 import os.log
 
 /// Proxies now playing info center.
