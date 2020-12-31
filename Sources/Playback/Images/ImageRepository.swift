@@ -82,7 +82,7 @@ public final class ImageRepository {
   private var urls = NSCache<NSString, NSURL>()
   
   /// Hi-res images of these feeds have been preloaded.
-  var preloadedImages = Set<Int>()
+  var preloadedImages = Set<String>()
 }
 
 // MARK: - Choosing and Caching URLs
@@ -95,35 +95,22 @@ extension ImageRepository {
   ///   - item: The image URL container.
   ///   - size: The size to choose an URL for.
   ///
-  /// - Returns: An image URL or `nil` if the item doesn’t contain one of the
-  /// expected URLs.
+  /// - Returns: An image URL or `nil` if the item doesn’t contain one of the expected URLs.
   private func imageURL(
-    representing item: Imaginable, at size: CGSize) -> URL? {
+    representing item: ImageURLs, at size: CGSize) -> URL? {
     let wanted = size.width * UIScreen.main.scale
 
-    var urlString: String?
+    var urlString: String
 
-    if wanted <= 30 {
-      urlString = item.iTunes?.img30
-    } else if wanted <= 60 {
-      urlString = item.iTunes?.img60
+    if wanted <= 60 {
+      urlString = item.small
     } else if wanted <= 180 {
-      urlString = item.iTunes?.img100
+      urlString = item.medium
     } else {
-      urlString = item.iTunes?.img600
+      urlString = item.large
     }
 
-    if urlString == nil {
-      os_log("falling back on LARGE image", log: log)
-
-      if let entry = item as? Entry {
-        urlString = entry.feedImage
-      }
-
-      urlString = urlString ?? item.image
-    }
-
-    guard let string = urlString, let url = makeURL(string: string) else {
+    guard let url = makeURL(string: urlString) else {
       os_log("no image URL", log: log, type: .error)
       return nil
     }
@@ -164,17 +151,9 @@ extension ImageRepository {
   ///
   /// Receiving an image response but no URL is impossible.
   private func makePlaceholder(
-    item: Imaginable, size: CGSize, isClean: Bool) -> (URL?, ImageContainer?) {
-    guard let iTunes = item.iTunes else {
-      os_log("aborting placeholding: iTunes object not found", log: log)
-      return (nil, nil)
-    }
-
-    var urlStrings = [iTunes.img30, iTunes.img60, iTunes.img100, iTunes.img600]
-
-    if let image = item.image {
-      urlStrings.append(image)
-    }
+    item: ImageURLs, size: CGSize, isClean: Bool
+  ) -> (URL?, ImageContainer?) {
+    let urlStrings = [item.small, item.medium, item.large]
 
     // Finding the first cached response.
 
@@ -246,7 +225,7 @@ extension ImageRepository: Images {
   }
 
   public func cachedImage(
-    representing item: Imaginable, at size: CGSize) -> UIImage? {
+    representing item: ImageURLs, at size: CGSize) -> UIImage? {
     dispatchPrecondition(condition: .notOnQueue(.main))
     
     guard let url = imageURL(representing: item, at: size) else {
@@ -329,7 +308,7 @@ extension ImageRepository: Images {
   }
 
   public func loadImage(
-    representing item: Imaginable,
+    representing item: ImageURLs,
     into imageView: UIImageView,
     options: FKImageLoadingOptions,
     completionBlock: (() -> Void)? = nil
@@ -429,7 +408,7 @@ extension ImageRepository: Images {
   }
 
   public func loadImage(
-    representing item: Imaginable,
+    representing item: ImageURLs,
     into imageView: UIImageView,
     options: FKImageLoadingOptions
   ) {
@@ -442,7 +421,7 @@ extension ImageRepository: Images {
   }
 
   public func loadImage(
-    representing item: Imaginable, into imageView: UIImageView) {
+    representing item: ImageURLs, into imageView: UIImageView) {
     let defaults = FKImageLoadingOptions()
 
     loadImage(representing: item, into: imageView, options: defaults)
@@ -454,7 +433,7 @@ extension ImageRepository: Images {
 extension ImageRepository {
   
   public func loadImage(
-    representing item: Imaginable,
+    representing item: ImageURLs,
     at size: CGSize,
     completed: ((UIImage?) -> Void)?) {
     guard let request = makeRequests(items: [item], size: size, quality: .medium).first else {
@@ -476,7 +455,7 @@ extension ImageRepository {
 extension ImageRepository {
 
   private func makeRequests(
-    items: [Imaginable], size: CGSize, quality: ImageQuality
+    items: [ImageURLs], size: CGSize, quality: ImageQuality
   ) -> [ImageRequest] {
     return items.compactMap {
       let relativeSize = ImageRepository.makeSize(size: size, quality: quality)
@@ -492,7 +471,7 @@ extension ImageRepository {
   }
 
   public func prefetchImages(
-    representing items: [Imaginable], at size: CGSize, quality: ImageQuality
+    representing items: [ImageURLs], at size: CGSize, quality: ImageQuality
   ) -> [ImageRequest] {
     os_log("prefetching: %{public}i", log: log, type: .info, items.count)
 
@@ -509,7 +488,7 @@ extension ImageRepository {
   }
 
   public func cancelPrefetching(
-    _ items: [Imaginable], at size: CGSize, quality: ImageQuality) {
+    _ items: [ImageURLs], at size: CGSize, quality: ImageQuality) {
     os_log("cancelling prefetching: %{public}i", 
            log: log, type: .info, items.count)
 
@@ -523,18 +502,18 @@ extension ImageRepository {
 
 extension ImageRepository {
   
-  public func preloadImages(representing items: [Imaginable], at size: CGSize) {
-    let ids = Set(items.compactMap { $0.iTunes?.iTunesID })
+  public func preloadImages(representing items: [ImageURLs], at size: CGSize) {
+    let ids = Set(items.compactMap { $0.id })
     let diff = ids.subtracting(preloadedImages)
     
-    let needed = items.filter { 
-      guard let id = $0.iTunes?.iTunesID else { return false }
-      return diff.contains(id) 
+    let needed = items.filter {
+      return diff.contains($0.id)
     }
     
-    let preloading: [Int] = needed.compactMap {
-      guard let id = $0.iTunes?.iTunesID, !preloadedImages.contains(id),
-        let url = imageURL(representing: $0, at: size) else {
+    let preloading: [String] = needed.compactMap {
+      let id = $0.id
+      
+      guard !preloadedImages.contains(id), let url = imageURL(representing: $0, at: size) else {
         return nil
       }
       

@@ -25,23 +25,22 @@ public struct NowPlaying {
   /// - Parameters:
   ///    - entry: The entry to display in playing info.
   ///    - player: The current player to probe for information.
-  public static func set(entry: Entry, player: AVPlayer? = nil) {    
+  public static func set(entry: PlaybackItem, player: AVPlayer? = nil) {
     var info: [String : Any] = [
-      MPMediaItemPropertyAlbumTitle: entry.feedTitle!,
+      MPMediaItemPropertyAlbumTitle: entry.subtitle,
       MPMediaItemPropertyMediaType: 1,
       MPMediaItemPropertyTitle: entry.title
     ]
     
     info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(
       boundsSize: CGSize(width: 600, height: 600)) { size in
-      return ImageRepository.shared.cachedImage(representing: entry, at: size) ?? #imageLiteral(resourceName: "Oval")
+      return ImageRepository.shared.cachedImage(representing: entry.imageURLs, at: size) ?? #imageLiteral(resourceName: "Oval")
     }
     
-    info[MPNowPlayingInfoPropertyExternalContentIdentifier] = entry.guid
+    info[MPNowPlayingInfoPropertyExternalContentIdentifier] = entry.id
     info[MPNowPlayingInfoPropertyMediaType] = 1
     
-    if let enclosure = entry.enclosure,
-      let url = URL(string: enclosure.url) {
+    if let assetURLString = entry.nowPlaying?.assetURL, let url = URL(string: assetURLString) {
       info[MPNowPlayingInfoPropertyAssetURL] = url
     }
     

@@ -9,7 +9,6 @@
 import Foundation
 import Nuke
 import UIKit
-import FeedKit
 
 /// Represents an image request.
 public typealias ImageRequest = Nuke.ImageRequest
@@ -21,15 +20,28 @@ public enum ImageQuality: CGFloat {
   case low = 4
 }
 
-/// An item for which an image can be loaded.
-public protocol Imaginable {
-  var iTunes: ITunesItem? { get }
-  var image: String? { get }
-  var title: String { get }
+public struct ImageURLs {
+  
+  public let id: PlaybackItem.ID
+  public let title: String
+  public let small: String
+  public let medium: String
+  public let large: String
+  
+  public init(
+    id: PlaybackItem.ID,
+    title: String,
+    small: String,
+    medium: String,
+    large: String
+  ) {
+    self.id = id
+    self.title = title
+    self.small = small
+    self.medium = medium
+    self.large = large
+  }
 }
-
-extension Entry: Imaginable {}
-extension Feed: Imaginable {}
 
 /// Configures image loading.
 public struct FKImageLoadingOptions {
@@ -78,31 +90,28 @@ public protocol Images {
   ///   - options: Some options specify details about how to load this image.
   ///   - completionBlock: A block to execute when the image has been loaded.
   func loadImage(
-    representing item: Imaginable,
+    representing item: ImageURLs,
     into imageView: UIImageView,
     options: FKImageLoadingOptions,
     completionBlock: (() -> Void)?
   )
 
   func loadImage(
-    representing item: Imaginable,
+    representing item: ImageURLs,
     into imageView: UIImageView,
     options: FKImageLoadingOptions
   )
 
   /// Loads an image using default options, falling back on existing image,
   /// medium quality, and preloading smaller images for large sizes.
-  func loadImage(representing item: Imaginable, into imageView: UIImageView)
+  func loadImage(representing item: ImageURLs, into imageView: UIImageView)
   
   /// Preloads images representing `items` at `size`.
   ///
   /// Keeps track of successfully loaded images producing no duplicates.
-  func preloadImages(representing items: [Imaginable], at size: CGSize)
+  func preloadImages(representing items: [ImageURLs], at size: CGSize)
   
-  func loadImage(
-    representing item: Imaginable,
-    at size: CGSize,
-    completed: ((UIImage?) -> Void)?)
+  func loadImage(representing item: ImageURLs, at size: CGSize, completed: ((UIImage?) -> Void)?)
 
   /// Prefetches images of `items`, preheating the image cache.
   ///
@@ -110,12 +119,12 @@ public protocol Images {
   /// this prefetching batch.
   @discardableResult
   func prefetchImages(
-    representing items: [Imaginable], at size: CGSize, quality: ImageQuality
+    representing items: [ImageURLs], at size: CGSize, quality: ImageQuality
   ) -> [ImageRequest]
 
   /// Cancels prefetching images for `items` at `size` of `quality`.
   func cancelPrefetching(
-     _ items: [Imaginable], at size: CGSize, quality: ImageQuality)
+     _ items: [ImageURLs], at size: CGSize, quality: ImageQuality)
 
   /// Cancels prefetching `requests`.
   func cancel(prefetching requests: [ImageRequest])
@@ -124,7 +133,7 @@ public protocol Images {
   func cancel(displaying view: UIImageView?)
 
   /// Returns a cached image for `item` appropriate for `size`. 
-  func cachedImage(representing item: Imaginable, at size: CGSize) -> UIImage?
+  func cachedImage(representing item: ImageURLs, at size: CGSize) -> UIImage?
 
   /// Flushes in-memory caches.
   func flush()

@@ -7,7 +7,6 @@
 //
 
 import Foundation
-import FeedKit
 import AVKit
 
 // MARK: - PlaybackState
@@ -29,16 +28,16 @@ public enum PlaybackState: Equatable {
   // TODO: Consider keeping AVPlayerItem in following states:
 
   /// The current item has been paused.
-  case paused(Entry, PlaybackError?)
+  case paused(PlaybackItem, PlaybackError?)
   
   /// Preparing a new item for playback.
-  case preparing(Entry, Resuming)
+  case preparing(PlaybackItem, Resuming)
   
   /// Playing an audible item.
-  case listening(Entry)
+  case listening(PlaybackItem)
   
   /// Playing a visual item.
-  case viewing(Entry, AVPlayer)
+  case viewing(PlaybackItem, AVPlayer)
   
   /// Conveniently initializes paused state including playback error, for all
   /// states transfer to `.paused(Entry, PlaybackError)` after an error event.
@@ -46,7 +45,7 @@ public enum PlaybackState: Equatable {
   /// - Parameters:
   ///   - entry: The entry being paused as a result of an error.
   ///   - error: The error that caused the problem.
-  init(paused entry: Entry, error: Error) {
+  init(paused entry: PlaybackItem, error: Error) {
     let playbackError: PlaybackError = {
       switch error {
       case let avError as NSError:
@@ -107,7 +106,7 @@ extension PlaybackState {
     }
   }
   
-  var entry: Entry? {
+  var entry: PlaybackItem? {
     switch self {
     case .preparing(let entry, _),
          .listening(let entry),
@@ -124,7 +123,7 @@ extension PlaybackState {
 
 /// Enumerates events of the playback FSM.
 enum PlaybackEvent {
-  case change(Entry?, Bool)
+  case change(PlaybackItem?, Bool)
   case end
   case error(PlaybackError)
   case paused

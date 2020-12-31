@@ -8,7 +8,6 @@
 
 import AVFoundation
 import AVKit
-import FeedKit
 import Foundation
 import os.log
 import Ola
@@ -129,10 +128,9 @@ public final class PlaybackSession: NSObject, Playback {
   }
 
   /// Sets the playback time to previous for `entry`.
-  public func seek(_ entry: Entry, playing: Bool, position: TimeInterval? = nil) -> PlaybackState {    
+  public func seek(_ entry: PlaybackItem, playing: Bool, position: TimeInterval? = nil) -> PlaybackState {    
     guard
       let player = self.player,
-      let enclosure = entry.enclosure,
       let tracks = player.currentItem?.tracks, !tracks.isEmpty else {
       fatalError("requirements to seek and play not met")
     }
@@ -142,13 +140,13 @@ public final class PlaybackSession: NSObject, Playback {
         return .paused(entry, nil)
       }
       
-      return PlaybackSession.isVideo(tracks: tracks, type: enclosure.type)
+      return PlaybackSession.isVideo(tracks: tracks, type: entry.proclaimedMediaType)
         ? .viewing(entry, player)
         : .listening(entry)
     }()
     
     guard let time = startTime(
-      item: player.currentItem, url: enclosure.url, position: position) else {
+      item: player.currentItem, url: entry.url, position: position) else {
       if playing { player.play() }
         
       return newState
@@ -174,7 +172,7 @@ public final class PlaybackSession: NSObject, Playback {
   }
 
   private static func isVideo(
-    tracks: [AVPlayerItemTrack], type: EnclosureType) -> Bool {
+    tracks: [AVPlayerItemTrack], type: MediaType) -> Bool {
     let containsVideo = tracks.contains {
       $0.assetTrack?.mediaType == .video
     }
@@ -189,8 +187,8 @@ public final class PlaybackSession: NSObject, Playback {
       fatalError("no tracks to play")
     }
 
-    guard let enclosure = currentEntry?.enclosure,
-      PlaybackSession.isVideo(tracks: tracks, type: enclosure.type) else {
+    guard let type = currentEntry?.proclaimedMediaType,
+      PlaybackSession.isVideo(tracks: tracks, type: type) else {
       return
     }
 
@@ -375,10 +373,8 @@ public final class PlaybackSession: NSObject, Playback {
   }
 
   /// Returns: `.paused`, `.preparing`, `listening` or `viewing`
-  private func prepare(_ entry: Entry, playing: Bool = true) -> PlaybackState {
-    guard
-      let urlString = entry.enclosure?.url,
-      let url = URL(string: urlString) else {
+  private func prepare(_ entry: PlaybackItem, playing: Bool = true) -> PlaybackState {
+    guard let url = URL(string: entry.url) else {
       fatalError("unhandled error: invalid enclosure: \(entry)")
     }
     
@@ -408,7 +404,7 @@ public final class PlaybackSession: NSObject, Playback {
   /// as played, its time is saved as `CMTime.indefinite`.
   private func setCurrentTime() {
     guard let player = self.player,
-      let url = currentEntry?.enclosure?.url else {
+      let url = currentEntry?.url else {
       os_log("aborting: unexpected attempt to set time", log: log)
       return
     }
@@ -541,11 +537,10 @@ public final class PlaybackSession: NSObject, Playback {
       case .playing:
         guard
           let player = self.player,
-          let tracks = player.currentItem?.tracks,
-          let type = pausedEntry.enclosure?.type else {
+          let tracks = player.currentItem?.tracks else {
           fatalError("impossible")
         }
-        if PlaybackSession.isVideo(tracks: tracks, type: type) {
+        if PlaybackSession.isVideo(tracks: tracks, type: pausedEntry.proclaimedMediaType) {
           return state = .viewing(pausedEntry, player)
         } else {
           return state = .listening(pausedEntry)
@@ -618,12 +613,11 @@ public final class PlaybackSession: NSObject, Playback {
       case .playing:
         guard
           let player = self.player,
-          let tracks = player.currentItem?.tracks,
-          let type = preparingEntry.enclosure?.type else {
+          let tracks = player.currentItem?.tracks else {
           fatalError("impossible")
         }
 
-        let isVideo = PlaybackSession.isVideo(tracks: tracks, type: type)
+        let isVideo = PlaybackSession.isVideo(tracks: tracks, type: preparingEntry.proclaimedMediaType)
 
         player.allowsExternalPlayback = isVideo
 
@@ -753,25 +747,25 @@ extension PlaybackSession {
 
 extension PlaybackSession: Playing {
   
-  public func isPlaying(guid: EntryGUID) -> Bool {
+  public func isPlaying(guid: PlaybackItem.ID) -> Bool {
     switch state {
     case .listening(let entry),
          .viewing(let entry, _):
-      return entry.guid == guid
+      return entry.id == guid
     case .inactive, .paused, .preparing:
       return false
     }
   }
   
   public func isUnplayed(uid: String) -> Bool {
-    guard currentEntry?.enclosure?.url != uid else {
+    guard currentEntry?.url != uid else {
       return false
     }
     
     return times.isUnplayed(uid: uid)
   }
 
-  public var currentEntry: Entry? {
+  public var currentEntry: PlaybackItem? {
     return state.entry
   }
 
@@ -816,7 +810,7 @@ extension PlaybackSession: Playing {
   }
 
   @discardableResult
-  public func resume(entry: Entry? = nil) -> Bool {
+  public func resume(entry: PlaybackItem? = nil, time: Double? = nil) -> Bool {
     incoming.async {
       entry == nil ? self.event(.resume) : self.event(.change(entry!, true))
       
@@ -830,7 +824,7 @@ extension PlaybackSession: Playing {
   }
 
   @discardableResult
-  public func pause(entry: Entry? = nil) -> Bool {
+  public func pause(entry: PlaybackItem? = nil) -> Bool {
     incoming.async {
       entry == nil ? self.event(.pause) : self.event(.change(entry!, false))
       

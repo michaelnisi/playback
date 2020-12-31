@@ -10,10 +10,13 @@ import AVFoundation
 import AVKit
 import Foundation
 import os.log
-import FeedKit // 🗑
 
 public enum MediaType: UInt {
   case none, audio, video
+  
+  var isVideo: Bool {
+    self == .video
+  }
 }
 
 public struct NowPlayingInfo {
@@ -43,36 +46,25 @@ public struct NowPlayingInfo {
   }
 }
 
-public struct ImageURLs {
+public struct PlaybackItem: Identifiable, Equatable {
+    
+  public typealias ID = String
   
-  public let guid: PlaybackItem.Identifier
-  public let small: String
-  public let medium: String
-  public let large: String
-  
-  public init(
-    guid: PlaybackItem.Identifier,
-    small: String,
-    medium: String,
-    large: String
-  ) {
-    self.guid = guid
-    self.small = small
-    self.medium = medium
-    self.large = large
-  }
-}
-
-public struct PlaybackItem: Identifiable {
-
-  public typealias Identifier = String
+  public let id: ID
+  public let url: String
+  public let title: String
+  public let subtitle: String
+  public let imageURLs: ImageURLs
+  public let proclaimedMediaType: MediaType
+  public let nowPlaying: NowPlayingInfo?
   
   public init(
-    id: Identifier,
+    id: ID,
     url: String,
     title: String,
     subtitle: String,
     imageURLs: ImageURLs,
+    proclaimedMediaType: MediaType,
     nowPlaying: NowPlayingInfo? = nil
   ) {
     self.id = id
@@ -80,15 +72,13 @@ public struct PlaybackItem: Identifiable {
     self.title = title
     self.subtitle = subtitle
     self.imageURLs = imageURLs
+    self.proclaimedMediaType = proclaimedMediaType
     self.nowPlaying = nowPlaying
   }
   
-  public let id: Identifier
-  public let url: String
-  public let title: String
-  public let subtitle: String
-  public let imageURLs: ImageURLs
-  public let nowPlaying: NowPlayingInfo?
+  public static func == (lhs: PlaybackItem, rhs: PlaybackItem) -> Bool {
+    lhs.id == rhs.id
+  }
 }
 
 /// Enumerates playback errors.
@@ -159,10 +149,10 @@ public protocol PlaybackDelegate: class {
   func playback(session: Playback, didChange state: PlaybackState)
   
   /// Returns the next item.
-  func nextItem() -> Entry?
+  func nextItem() -> PlaybackItem?
   
   /// Returns the previous item.
-  func previousItem() -> Entry?
+  func previousItem() -> PlaybackItem?
 }
 
 /// Playing back audio-visual media enclosed by `FeedKit.Entry`, forwarding
@@ -171,15 +161,15 @@ public protocol PlaybackDelegate: class {
 public protocol Playing {
   
   /// The currently playing item.
-  var currentEntry: Entry? { get }
+  var currentEntry: PlaybackItem? { get }
   
   /// Resumes playing `entry` or the current item from its previous position.
   @discardableResult
-  func resume(entry: Entry?) -> Bool
+  func resume(entry: PlaybackItem?, time: Double?) -> Bool
   
   /// Pauses playback of `entry` or the current item.
   @discardableResult
-  func pause(entry: Entry?) -> Bool
+  func pause(entry: PlaybackItem?) -> Bool
   
   /// Toggles between playing and pausing the current item.
   @discardableResult
@@ -197,7 +187,7 @@ public protocol Playing {
   func isUnplayed(uid: String) -> Bool
   
   /// Returns `true` if an item matching `guid` is currently playing.
-  func isPlaying(guid: EntryGUID) -> Bool
+  func isPlaying(guid: PlaybackItem.ID) -> Bool
 }
 
 /// The main conglomerate API of this module.
@@ -212,5 +202,3 @@ public protocol Playback: Playing, NSObjectProtocol {
   /// our remote commands.
   func reclaim()
 }
-
-
