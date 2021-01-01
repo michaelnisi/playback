@@ -781,7 +781,7 @@ extension PlaybackSession: Playing {
   
   public func forward() -> Bool {
     incoming.async {
-      guard let item = self.delegate?.nextItem() else {
+      guard let item = self.delegate?.nextItem()?.makePlaybackItem() else {
         return
       }
 
@@ -798,7 +798,7 @@ extension PlaybackSession: Playing {
 
   public func backward() -> Bool {
     incoming.async {
-      guard let item = self.delegate?.previousItem() else {
+      guard let item = self.delegate?.previousItem()?.makePlaybackItem() else {
         return
       }
       
@@ -815,9 +815,9 @@ extension PlaybackSession: Playing {
 
   // TODO: Resume from time
   @discardableResult
-  public func resume(entry: PlaybackItem? = nil, from time: Double? = nil) -> Bool {
+  public func resume(entry: Playable? = nil, from time: Double? = nil) -> Bool {
     incoming.async {
-      entry == nil ? self.event(.resume) : self.event(.change(entry!, true))
+      entry == nil ? self.event(.resume) : self.event(.change(entry!.makePlaybackItem(), true))
       
       guard self.state.isOK else {
         os_log("resume command failed", log: log, type: .error)
@@ -830,9 +830,9 @@ extension PlaybackSession: Playing {
 
   // TODO: Pause at time
   @discardableResult
-  public func pause(entry: PlaybackItem? = nil, at time: Double? = nil) -> Bool {
+  public func pause(entry: Playable? = nil, at time: Double? = nil) -> Bool {
     incoming.async {
-      entry == nil ? self.event(.pause) : self.event(.change(entry!, false))
+      entry == nil ? self.event(.pause) : self.event(.change(entry!.makePlaybackItem(), false))
       
       guard self.state.isOK else {
         os_log("pause command failed", log: log, type: .error)

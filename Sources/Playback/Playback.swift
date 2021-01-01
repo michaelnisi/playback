@@ -171,10 +171,14 @@ public protocol PlaybackDelegate: class {
   func playback(session: Playback, didChange state: PlaybackState)
   
   /// Returns the next item.
-  func nextItem() -> PlaybackItem?
+  func nextItem() -> Playable?
   
   /// Returns the previous item.
-  func previousItem() -> PlaybackItem?
+  func previousItem() -> Playable?
+}
+
+public protocol Playable {
+  func makePlaybackItem() -> PlaybackItem
 }
 
 /// Playing back audio-visual media enclosed by `PlaybackItem`, forwarding
@@ -187,11 +191,11 @@ public protocol Playing {
   
   /// Resumes playing `entry` or the current item from its previous position or from `time`.
   @discardableResult
-  func resume(entry: PlaybackItem?, from time: Double?) -> Bool
+  func resume(entry: Playable?, from time: Double?) -> Bool
   
   /// Pauses playback of `entry` or the current item at `time`.
   @discardableResult
-  func pause(entry: PlaybackItem?, at time: Double?) -> Bool
+  func pause(entry: Playable?, at time: Double?) -> Bool
   
   /// Toggles between playing and pausing the current item.
   @discardableResult
