@@ -26,7 +26,7 @@ struct RemoteCommandTargets {
 public final class PlaybackSession: NSObject, Playback {
 
   private let times: Times
-
+  
   /// Internal serial queue, our inbox for events.
   private let sQueue = DispatchQueue(
     label: "ink.codes.playback.PlaybackSession",
@@ -41,6 +41,11 @@ public final class PlaybackSession: NSObject, Playback {
   }
 
   weak public var delegate: PlaybackDelegate?
+  
+  public var volume: Float {
+    set { player?.volume = newValue }
+    get { player?.volume ?? 0 }
+  }
 
   // MARK: Internals
 
@@ -813,12 +818,15 @@ extension PlaybackSession: Playing {
     return true
   }
 
-  // TODO: Resume from time
   @discardableResult
   public func resume(entry: Playable? = nil, from time: Double? = nil) -> Bool {
     incoming.async {
-      entry == nil ? self.event(.resume) : self.event(.change(entry!.makePlaybackItem(), true))
-      
+      if let entry = entry {
+        self.event(.change(entry.makePlaybackItem(), true))
+      } else {
+        self.event(.resume)
+      }
+
       guard self.state.isOK else {
         os_log("resume command failed", log: log, type: .error)
         return
@@ -828,11 +836,14 @@ extension PlaybackSession: Playing {
     return true
   }
 
-  // TODO: Pause at time
   @discardableResult
   public func pause(entry: Playable? = nil, at time: Double? = nil) -> Bool {
     incoming.async {
-      entry == nil ? self.event(.pause) : self.event(.change(entry!.makePlaybackItem(), false))
+      if let entry = entry {
+        self.event(.change(entry.makePlaybackItem(), false))
+      } else {
+        self.event(.pause)
+      }
       
       guard self.state.isOK else {
         os_log("pause command failed", log: log, type: .error)

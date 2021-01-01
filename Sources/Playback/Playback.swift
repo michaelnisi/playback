@@ -227,4 +227,7 @@ public protocol Playback: Playing, NSObjectProtocol {
   /// `AVPlayerViewController`, which sets its own remote commands, overwriting
   /// our remote commands.
   func reclaim()
+  
+  /// The audio playback volume for the player.
+  var volume: Float { get set }
 }
