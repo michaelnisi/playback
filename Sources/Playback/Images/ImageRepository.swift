@@ -150,9 +150,10 @@ extension ImageRepository {
   ///
   /// Receiving an image response but no URL is impossible.
   private func makePlaceholder(
-    item: ImageURLs, size: CGSize, isClean: Bool
+    item: Imaginable, size: CGSize, isClean: Bool
   ) -> (URL?, ImageContainer?) {
-    let urlStrings = [item.small, item.medium, item.large]
+    let urls = item.makeURLs()
+    let urlStrings = [urls.small, urls.medium, urls.large]
 
     // Finding the first cached response.
 
@@ -181,7 +182,7 @@ extension ImageRepository {
     let l =  1 / 4 / UIScreen.main.scale
     let s = size.applying(CGAffineTransform(scaleX: l, y: l))
 
-    return (imageURL(representing: item, at: s), nil)
+    return (imageURL(representing: item.makeURLs(), at: s), nil)
   }
 }
 
@@ -307,7 +308,7 @@ extension ImageRepository: Images {
   }
 
   public func loadImage(
-    representing item: ImageURLs,
+    representing item: Imaginable,
     into imageView: UIImageView,
     options: FKImageLoadingOptions,
     completionBlock: (() -> Void)? = nil
@@ -315,14 +316,15 @@ extension ImageRepository: Images {
     dispatchPrecondition(condition: .onQueue(.main))
     
     let originalSize = imageView.bounds.size
+    let urls = item.makeURLs()
 
     os_log("getting: ( %{public}@, %{public}@ )",
-           log: log, type: .info, item.title, originalSize as CVarArg)
+           log: log, type: .info, urls.title, originalSize as CVarArg)
 
     let relativeSize = ImageRepository.makeSize(
       size: originalSize, quality: options.quality)
 
-    guard let itemURL = imageURL(representing: item, at: relativeSize) else {
+    guard let itemURL = imageURL(representing: item.makeURLs(), at: relativeSize) else {
       os_log("missing URL: %{public}@",
              log: log, type: .error, String(describing: item))
       return
@@ -332,7 +334,7 @@ extension ImageRepository: Images {
 
     if let res = cachedResponse(matching: id) {
       os_log("cache hit: ( %{public}@, %{public}@ )",
-             log: log, type: .info, item.title, itemURL.lastPathComponent)
+             log: log, type: .info, urls.title, itemURL.lastPathComponent)
 
       imageView.image = res.image
 
@@ -389,8 +391,10 @@ extension ImageRepository: Images {
     os_log("placeholding", log: log, type: .info)
 
     if let image = placeholder?.image {
+      let urls = item.makeURLs()
       let p = placeholderURL?.lastPathComponent ?? "weirdly got no URL"
-      os_log("cache hit: ( %{public}@, %{public}@ )", log: log, type: .info, item.title, p)
+      
+      os_log("cache hit: ( %{public}@, %{public}@ )", log: log, type: .info, urls.title, p)
       
       imageView.image = image
 
@@ -407,7 +411,7 @@ extension ImageRepository: Images {
   }
 
   public func loadImage(
-    representing item: ImageURLs,
+    representing item: Imaginable,
     into imageView: UIImageView,
     options: FKImageLoadingOptions
   ) {
@@ -420,7 +424,7 @@ extension ImageRepository: Images {
   }
 
   public func loadImage(
-    representing item: ImageURLs, into imageView: UIImageView) {
+    representing item: Imaginable, into imageView: UIImageView) {
     let defaults = FKImageLoadingOptions()
 
     loadImage(representing: item, into: imageView, options: defaults)
@@ -432,7 +436,7 @@ extension ImageRepository: Images {
 extension ImageRepository {
   
   public func loadImage(
-    representing item: ImageURLs,
+    representing item: Imaginable,
     at size: CGSize,
     completed: ((UIImage?) -> Void)?) {
     guard let request = makeRequests(items: [item], size: size, quality: .medium).first else {
@@ -454,12 +458,12 @@ extension ImageRepository {
 extension ImageRepository {
 
   private func makeRequests(
-    items: [ImageURLs], size: CGSize, quality: ImageQuality
+    items: [Imaginable], size: CGSize, quality: ImageQuality
   ) -> [ImageRequest] {
     return items.compactMap {
       let relativeSize = ImageRepository.makeSize(size: size, quality: quality)
 
-      guard let url = imageURL(representing: $0, at: relativeSize) else {
+      guard let url = imageURL(representing: $0.makeURLs(), at: relativeSize) else {
         return nil
       }
 
@@ -470,7 +474,7 @@ extension ImageRepository {
   }
 
   public func prefetchImages(
-    representing items: [ImageURLs], at size: CGSize, quality: ImageQuality
+    representing items: [Imaginable], at size: CGSize, quality: ImageQuality
   ) -> [ImageRequest] {
     os_log("prefetching: %{public}i", log: log, type: .info, items.count)
 
@@ -487,7 +491,7 @@ extension ImageRepository {
   }
 
   public func cancelPrefetching(
-    _ items: [ImageURLs], at size: CGSize, quality: ImageQuality) {
+    _ items: [Imaginable], at size: CGSize, quality: ImageQuality) {
     os_log("cancelling prefetching: %{public}i", 
            log: log, type: .info, items.count)
 
@@ -501,11 +505,12 @@ extension ImageRepository {
 
 extension ImageRepository {
   
-  public func preloadImages(representing items: [ImageURLs], at size: CGSize) {
-    let ids = Set(items.compactMap { $0.id })
+  public func preloadImages(representing items: [Imaginable], at size: CGSize) {
+    let urls = items.map { $0.makeURLs() }
+    let ids = Set(urls.compactMap { $0.id })
     let diff = ids.subtracting(preloadedImages)
     
-    let needed = items.filter {
+    let needed = urls.filter {
       return diff.contains($0.id)
     }
     

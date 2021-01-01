@@ -78,6 +78,11 @@ public struct FKImageLoadingOptions {
   }
 }
 
+/// Types representing image loadable content must implement the `Imaginable` protocol to use `Images` for loading.
+public protocol Imaginable {
+  func makeURLs() -> ImageURLs
+}
+
 /// An image loading API.
 public protocol Images {
 
@@ -92,28 +97,28 @@ public protocol Images {
   ///   - options: Some options specify details about how to load this image.
   ///   - completionBlock: A block to execute when the image has been loaded.
   func loadImage(
-    representing item: ImageURLs,
+    representing item: Imaginable,
     into imageView: UIImageView,
     options: FKImageLoadingOptions,
     completionBlock: (() -> Void)?
   )
 
   func loadImage(
-    representing item: ImageURLs,
+    representing item: Imaginable,
     into imageView: UIImageView,
     options: FKImageLoadingOptions
   )
 
   /// Loads an image using default options, falling back on existing image,
   /// medium quality, and preloading smaller images for large sizes.
-  func loadImage(representing item: ImageURLs, into imageView: UIImageView)
+  func loadImage(representing item: Imaginable, into imageView: UIImageView)
   
   /// Preloads images representing `items` at `size`.
   ///
   /// Keeps track of successfully loaded images producing no duplicates.
-  func preloadImages(representing items: [ImageURLs], at size: CGSize)
+  func preloadImages(representing items: [Imaginable], at size: CGSize)
   
-  func loadImage(representing item: ImageURLs, at size: CGSize, completed: ((UIImage?) -> Void)?)
+  func loadImage(representing item: Imaginable, at size: CGSize, completed: ((UIImage?) -> Void)?)
 
   /// Prefetches images of `items`, preheating the image cache.
   ///
@@ -121,12 +126,12 @@ public protocol Images {
   /// this prefetching batch.
   @discardableResult
   func prefetchImages(
-    representing items: [ImageURLs], at size: CGSize, quality: ImageQuality
+    representing items: [Imaginable], at size: CGSize, quality: ImageQuality
   ) -> [ImageRequest]
 
   /// Cancels prefetching images for `items` at `size` of `quality`.
   func cancelPrefetching(
-     _ items: [ImageURLs], at size: CGSize, quality: ImageQuality)
+     _ items: [Imaginable], at size: CGSize, quality: ImageQuality)
 
   /// Cancels prefetching `requests`.
   func cancel(prefetching requests: [ImageRequest])
