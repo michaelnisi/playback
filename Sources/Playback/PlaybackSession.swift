@@ -10,7 +10,6 @@ import AVFoundation
 import AVKit
 import Foundation
 import os.log
-import Ola
 
 let log = OSLog(subsystem: "ink.codes.playback", category: "av")
 
@@ -23,7 +22,7 @@ struct RemoteCommandTargets {
 }
 
 /// Implements `Playback` as FSM using worker and a serial queue.
-public final class PlaybackSession: NSObject, Playback {
+public final class PlaybackSession<Item: Playable>: NSObject {
 
   private let times: Times
   
@@ -39,9 +38,22 @@ public final class PlaybackSession: NSObject, Playback {
   public init(times: Times) {
     self.times = times
   }
-
-  weak public var delegate: PlaybackDelegate?
   
+  /// Returns a local or remote URL for `url`. One might return `nil` to signal
+  /// that the URL is not reachable, implying that the returned URL must be
+  /// reachable on the current network, otherwise return `nil`.
+  public var urlProxy: ((URL) -> URL?)?
+  
+  /// Called when this session’s playback `state` changed.
+  public var playbackDidChange: ((PlaybackSession<Item>, PlaybackState<Item>) -> Void)?
+  
+  /// Returns the next item.
+  public var nextItem: (() -> Item?)?
+  
+  /// Returns the previous item.
+  public var previousItem: (() -> Item?)?
+  
+  /// The audio playback volume for the player.
   public var volume: Float {
     set { player?.volume = newValue }
     get { player?.volume ?? 0 }
@@ -136,26 +148,28 @@ public final class PlaybackSession: NSObject, Playback {
 
   /// Sets the playback time to previous for `entry`.
   public func seek(
-    _ entry: PlaybackItem, playing: Bool, position: TimeInterval? = nil
-  ) -> PlaybackState {
+    _ entry: Item, playing: Bool, position: TimeInterval? = nil
+  ) -> PlaybackState<Item> {
     guard
       let player = self.player,
       let tracks = player.currentItem?.tracks, !tracks.isEmpty else {
       fatalError("requirements to seek and play not met")
     }
+    
+    let item = entry.makePlaybackItem()
 
-    let newState: PlaybackState = {
+    let newState: PlaybackState<Item> = {
       guard playing else {
         return .paused(entry, nil)
       }
-      
-      return PlaybackSession.isVideo(tracks: tracks, type: entry.proclaimedMediaType)
+    
+      return PlaybackSession.isVideo(tracks: tracks, type: item.proclaimedMediaType)
         ? .viewing(entry, player)
         : .listening(entry)
     }()
     
     guard let time = startTime(
-      item: player.currentItem, url: entry.url, position: position) else {
+      item: player.currentItem, url: item.url, position: position) else {
       if playing { player.play() }
         
       return newState
@@ -173,7 +187,9 @@ public final class PlaybackSession: NSObject, Playback {
 
       DispatchQueue.main.async {
         if playing { player.play() }
-        NowPlaying.set(entry: entry, player: player)
+        let item = entry.makePlaybackItem()
+        
+        NowPlaying.set(entry: item, player: player)
       }
     }
     
@@ -195,8 +211,10 @@ public final class PlaybackSession: NSObject, Playback {
     guard let tracks = change?[.newKey] as? [AVPlayerItemTrack] else {
       fatalError("no tracks to play")
     }
+    
+    let item = currentEntry?.makePlaybackItem()
 
-    guard let type = currentEntry?.proclaimedMediaType,
+    guard let type = item?.proclaimedMediaType,
       PlaybackSession.isVideo(tracks: tracks, type: type) else {
       return
     }
@@ -249,7 +267,8 @@ public final class PlaybackSession: NSObject, Playback {
       return
     }
 
-    NowPlaying.set(entry: e, player: p)
+    let item = e.makePlaybackItem()
+    NowPlaying.set(entry: item, player: p)
   }
 
   private func onTimeControlChange(_ change: [NSKeyValueChangeKey : Any]?) {
@@ -382,12 +401,12 @@ public final class PlaybackSession: NSObject, Playback {
   }
 
   /// Returns: `.paused`, `.preparing`, `listening` or `viewing`
-  private func prepare(_ entry: PlaybackItem, playing: Bool = true) -> PlaybackState {
-    guard let url = URL(string: entry.url) else {
+  private func prepare(_ entry: Item, playing: Bool = true) -> PlaybackState<Item> {
+    guard let url = URL(string: entry.makePlaybackItem().url) else {
       fatalError("unhandled error: invalid enclosure: \(entry)")
     }
     
-    guard let proxiedURL = delegate?.proxy(url: url) else {
+    guard let proxiedURL = urlProxy?(url) else {
       os_log("could not prepare: unreachable: %@", log: log, url.absoluteString)
       pausePlayer()
       return .paused(entry, .unreachable)
@@ -413,7 +432,7 @@ public final class PlaybackSession: NSObject, Playback {
   /// as played, its time is saved as `CMTime.indefinite`.
   private func setCurrentTime() {
     guard let player = self.player,
-      let url = currentEntry?.url else {
+          let url = currentEntry?.makePlaybackItem().url else {
       os_log("aborting: unexpected attempt to set time", log: log)
       return
     }
@@ -443,7 +462,7 @@ public final class PlaybackSession: NSObject, Playback {
     times.set(t, for: url)
   }
 
-  private var state = PlaybackState.inactive(nil) {
+  private var state = PlaybackState<Item>.inactive(nil) {
     didSet {
       os_log("new state: %{public}@, old state: %{public}@",
              log: log, type: .info,
@@ -466,12 +485,13 @@ public final class PlaybackSession: NSObject, Playback {
       guard needsUpdate else {
         return
       }
+      
 
-      delegate?.playback(session: self, didChange: state)
+      playbackDidChange?(self, state)
 
       switch state {
       case .paused(let entry, _), .preparing(let entry, _):
-        NowPlaying.set(entry: entry, player: player)
+        NowPlaying.set(entry: entry.makePlaybackItem(), player: player)
       case .inactive, .listening, .viewing:
         break
       }
@@ -486,7 +506,7 @@ public final class PlaybackSession: NSObject, Playback {
     }
   }
 
-  private func updateState(_ e: PlaybackEvent) {
+  private func updateState(_ e: PlaybackEvent<Item>) {
     os_log("handling event: %{public}@", log: log, type: .info, e.description)
 
     switch state {
@@ -549,7 +569,7 @@ public final class PlaybackSession: NSObject, Playback {
           let tracks = player.currentItem?.tracks else {
           fatalError("impossible")
         }
-        if PlaybackSession.isVideo(tracks: tracks, type: pausedEntry.proclaimedMediaType) {
+        if PlaybackSession.isVideo(tracks: tracks, type: pausedEntry.makePlaybackItem().proclaimedMediaType) {
           return state = .viewing(pausedEntry, player)
         } else {
           return state = .listening(pausedEntry)
@@ -626,7 +646,7 @@ public final class PlaybackSession: NSObject, Playback {
           fatalError("impossible")
         }
 
-        let isVideo = PlaybackSession.isVideo(tracks: tracks, type: preparingEntry.proclaimedMediaType)
+        let isVideo = PlaybackSession.isVideo(tracks: tracks, type: preparingEntry.makePlaybackItem().proclaimedMediaType)
 
         player.allowsExternalPlayback = isVideo
 
@@ -712,7 +732,7 @@ public final class PlaybackSession: NSObject, Playback {
     }
   }
 
-  private func event(_ e: PlaybackEvent) {
+  private func event(_ e: PlaybackEvent<Item>) {
     sQueue.sync {
       updateState(e)
     }
@@ -735,7 +755,7 @@ extension PlaybackSession {
     addRemoteCommandTargets()
   }
 
-  private func deactivate() -> PlaybackState {
+  private func deactivate() -> PlaybackState<Item> {
     os_log("deactivating", log: log, type: .info)
     
     do {
@@ -754,27 +774,27 @@ extension PlaybackSession {
 
 // MARK: - Playing
 
-extension PlaybackSession: Playing {
+extension PlaybackSession {
   
   public func isPlaying(guid: PlaybackItem.ID) -> Bool {
     switch state {
     case .listening(let entry),
          .viewing(let entry, _):
-      return entry.id == guid
+      return entry.makePlaybackItem().id == guid
     case .inactive, .paused, .preparing:
       return false
     }
   }
   
   public func isUnplayed(uid: String) -> Bool {
-    guard currentEntry?.url != uid else {
+    guard currentEntry?.makePlaybackItem().url != uid else {
       return false
     }
     
     return times.isUnplayed(uid: uid)
   }
 
-  public var currentEntry: PlaybackItem? {
+  public var currentEntry: Item? {
     return state.entry
   }
 
@@ -784,9 +804,10 @@ extension PlaybackSession: Playing {
     return DispatchQueue.global(qos: .userInitiated)
   }
   
+  @discardableResult
   public func forward() -> Bool {
     incoming.async {
-      guard let item = self.delegate?.nextItem()?.makePlaybackItem() else {
+      guard let item = self.nextItem?() else {
         return
       }
 
@@ -801,9 +822,10 @@ extension PlaybackSession: Playing {
     return true
   }
 
+  @discardableResult
   public func backward() -> Bool {
     incoming.async {
-      guard let item = self.delegate?.previousItem()?.makePlaybackItem() else {
+      guard let item = self.previousItem?() else {
         return
       }
       
@@ -819,10 +841,10 @@ extension PlaybackSession: Playing {
   }
 
   @discardableResult
-  public func resume(entry: Playable? = nil, from time: Double? = nil) -> Bool {
+  public func resume(entry: Item? = nil, from time: Double? = nil) -> Bool {
     incoming.async {
       if let entry = entry {
-        self.event(.change(entry.makePlaybackItem(), true))
+        self.event(.change(entry, true))
       } else {
         self.event(.resume)
       }
@@ -837,10 +859,10 @@ extension PlaybackSession: Playing {
   }
 
   @discardableResult
-  public func pause(entry: Playable? = nil, at time: Double? = nil) -> Bool {
+  public func pause(entry: Item? = nil, at time: Double? = nil) -> Bool {
     incoming.async {
       if let entry = entry {
-        self.event(.change(entry.makePlaybackItem(), false))
+        self.event(.change(entry, false))
       } else {
         self.event(.pause)
       }

@@ -158,76 +158,7 @@ public protocol Times {
   func isUnplayed(uid: String) -> Bool
 }
 
-/// A callback interface implemented by playback users to receive information
-/// about the playback session state.
-public protocol PlaybackDelegate: class {
-
-  /// Returns a local or remote URL for `url`. One might return `nil` to signal
-  /// that the URL is not reachable, implying that the returned URL must be
-  /// reachable on the current network, otherwise return `nil`.
-  func proxy(url: URL) -> URL?
-  
-  /// Called when this session’s playback `state` changed.
-  func playback(session: Playback, didChange state: PlaybackState)
-  
-  /// Returns the next item.
-  func nextItem() -> Playable?
-  
-  /// Returns the previous item.
-  func previousItem() -> Playable?
-}
-
-public protocol Playable {
+/// Playable with this API.
+public protocol Playable: Equatable {
   func makePlaybackItem() -> PlaybackItem
-}
-
-/// Playing back audio-visual media enclosed by `PlaybackItem`, forwarding
-/// information to `MediaPlayer` default now playing info center.
-/// Additionally, implementors should persist play times across devices.
-public protocol Playing {
-  
-  /// The currently playing item.
-  var currentEntry: PlaybackItem? { get }
-  
-  /// Resumes playing `entry` or the current item from its previous position or from `time`.
-  @discardableResult
-  func resume(entry: Playable?, from time: Double?) -> Bool
-  
-  /// Pauses playback of `entry` or the current item at `time`.
-  @discardableResult
-  func pause(entry: Playable?, at time: Double?) -> Bool
-  
-  /// Toggles between playing and pausing the current item.
-  @discardableResult
-  func toggle() -> Bool
-  
-  /// Sets current to the next item from the delegate.
-  @discardableResult
-  func forward() -> Bool
-  
-  /// Sets current to previous item from the delegate.
-  @discardableResult
-  func backward() -> Bool
-  
-  /// Returns `true` if the item matching `uid` has not been played before.
-  func isUnplayed(uid: String) -> Bool
-  
-  /// Returns `true` if an item matching `guid` is currently playing.
-  func isPlaying(guid: PlaybackItem.ID) -> Bool
-}
-
-/// The main conglomerate API of this module.
-public protocol Playback: Playing, NSObjectProtocol {
-  
-  /// The playback delegate receives feedback about the playback state and is
-  /// responsible to forward this information to the UI.
-  var delegate: PlaybackDelegate? { get set }
-  
-  /// Reclaims remote command center. For example, after dismissing a presented
-  /// `AVPlayerViewController`, which sets its own remote commands, overwriting
-  /// our remote commands.
-  func reclaim()
-  
-  /// The audio playback volume for the player.
-  var volume: Float { get set }
 }
