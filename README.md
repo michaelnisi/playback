@@ -4,22 +4,6 @@ The Playback Swift package for iOS plays audio and video. It manages a playback 
 
 Playback is used in the [Podest](https://github.com/michaelnisi/podest) podcast app.
 
-## Symbols
-
-Two protocols form the core surface of Playback.
-
-```swift
-protocol Playback
-```
-
-A `Playback` implementation is provided by the framework. It lets you play, pause, and resume `PlaybackItem` objects.
-
-```swift
-protocol PlaybackDelegate
-```
-
-The `PlaybackDelegate`, implemented by users, is queried by `Playback` for user feedback.
-
 ## FSM
 
 Audiovisual playback is asynchronous, a combination of IO and user events. Internally, Playback synchronizes these events and serially handles them, implementing a finite-state machine with five states.

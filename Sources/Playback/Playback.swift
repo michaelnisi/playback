@@ -22,21 +22,18 @@ public struct AssetState {
     }
   }
 
-  public let url: String
-  public let medium: Medium
+  public let url: URL
   public let rate: Float
-  public let duration: Double
-  public let time: Double
+  public let duration: CMTime
+  public let time: CMTime
   
   public init(
-    url: String,
-    medium: Medium,
+    url: URL,
     rate: Float,
-    duration: Double,
-    time: Double
+    duration: CMTime,
+    time: CMTime
   ) {
     self.url = url
-    self.medium = medium
     self.rate = rate
     self.duration = duration
     self.time = time
@@ -80,7 +77,7 @@ public struct PlaybackItem: Identifiable, Equatable {
     )
   }
   
-  init(
+  internal init(
     id: ID,
     url: String,
     title: String,
