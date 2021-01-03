@@ -823,12 +823,11 @@ extension PlaybackSession {
       return nil
     }
     
-    return AssetState(
-      url: assetURL,
-      rate: player.rate,
-      duration: playerItem.duration,
-      time: playerItem.currentTime()
-    )
+    let rate = player.rate
+    let duration = playerItem.duration.seconds
+    let time = min(playerItem.currentTime().seconds, duration)
+    
+    return AssetState(url: assetURL, rate: rate, duration: duration, time: time)
   }
 
   /// A system queue for our non-blocking surface area. Note, how all changes

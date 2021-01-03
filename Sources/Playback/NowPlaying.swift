@@ -42,14 +42,10 @@ public struct NowPlaying {
       info[MPNowPlayingInfoPropertyAssetURL] = url
     }
     
-    if let state = playbackItem.nowPlaying {
-      let rate = state.rate
-      let duration = state.duration.seconds
-      let time = min(state.time.seconds, duration) 
-
-      info[MPNowPlayingInfoPropertyPlaybackRate] = rate
-      info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = time 
-      info[MPMediaItemPropertyPlaybackDuration] = duration
+    if let nowPlaying = playbackItem.nowPlaying {
+      info[MPNowPlayingInfoPropertyPlaybackRate] = nowPlaying.rate
+      info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = nowPlaying.time
+      info[MPMediaItemPropertyPlaybackDuration] = nowPlaying.duration
     }
     
     os_log("setting now playing: %@", log: log, type: .info, info)

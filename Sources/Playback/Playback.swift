@@ -14,14 +14,14 @@ public struct AssetState {
 
   public let url: URL
   public let rate: Float
-  public let duration: CMTime
-  public let time: CMTime
+  public let duration: Double
+  public let time: Double
   
   public init(
     url: URL,
     rate: Float,
-    duration: CMTime,
-    time: CMTime
+    duration: Double,
+    time: Double
   ) {
     self.url = url
     self.rate = rate
