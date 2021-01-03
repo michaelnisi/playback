@@ -1,4 +1,4 @@
-## 11.0.0 (planned)
+## 11.0.0 (2021-01-03)
 
 Free from FeedKit dependency.
 
