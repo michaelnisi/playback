@@ -7,9 +7,7 @@
 //
 
 import AVFoundation
-import AVKit
 import Foundation
-import os.log
 
 /// State of a media asset.
 public struct AssetState {

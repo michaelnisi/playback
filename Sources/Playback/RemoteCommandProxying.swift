@@ -24,28 +24,27 @@ extension PlaybackSession: RemoteCommandProxying {
   // MARK: - Media Player Remote Command Handlers
   
   func status(_ ok: Bool) -> MPRemoteCommandHandlerStatus {
-    return ok ? MPRemoteCommandHandlerStatus.success :
-      MPRemoteCommandHandlerStatus.commandFailed
+    ok ? .success : .commandFailed
   }
   
   func onPlay(event: MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus {
-    return status(resume())
+    status(resume())
   }
   
   func onPause(event: MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus {
-    return status(pause())
+    status(pause())
   }
   
   func onToggle(event: MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus {
-    return status(toggle())
+    status(toggle())
   }
   
   func onPreviousTrack(event: MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus {
-    return status(backward())
+    status(backward())
   }
   
   func onNextTrack(event: MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus {
-    return status(forward())
+    status(forward())
   }
 
   func onChangePlaybackPosition(event: MPRemoteCommandEvent
@@ -72,11 +71,8 @@ extension PlaybackSession: RemoteCommandProxying {
 
       rcc.pauseCommand.addTarget(handler: self.onPause)
       rcc.playCommand.addTarget(handler: self.onPlay)
-
       rcc.changePlaybackPositionCommand.addTarget(handler: self.onChangePlaybackPosition)
-
       rcc.togglePlayPauseCommand.addTarget(handler: self.onToggle)
-
       rcc.nextTrackCommand.addTarget(handler: self.onNextTrack)
       rcc.previousTrackCommand.addTarget(handler: self.onPreviousTrack)
     }
