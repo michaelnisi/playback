@@ -36,7 +36,7 @@ public struct AssetState {
   }
 }
 
-/// `PlaybackItem` requests playback and represents a currently playing or paused item.
+/// Information about the current playback item.
 public struct PlaybackItem: Identifiable, Equatable {
   
   public enum MediaType: UInt {
