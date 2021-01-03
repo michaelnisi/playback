@@ -13,14 +13,6 @@ import os.log
 
 /// State of a media asset.
 public struct AssetState {
-  
-  public enum Medium: UInt {
-    case none, audio, video
-    
-    var isVideo: Bool {
-      self == .video
-    }
-  }
 
   public let url: URL
   public let rate: Float
@@ -46,6 +38,14 @@ public struct AssetState {
 
 /// `PlaybackItem` requests playback and represents a currently playing or paused item.
 public struct PlaybackItem: Identifiable, Equatable {
+  
+  public enum MediaType: UInt {
+    case none, audio, video
+    
+    var isVideo: Bool {
+      self == .video
+    }
+  }
     
   public typealias ID = String
   
@@ -54,7 +54,7 @@ public struct PlaybackItem: Identifiable, Equatable {
   public let title: String
   public let subtitle: String
   public let imageURLs: ImageURLs
-  public let proclaimedMediaType: AssetState.Medium
+  public let proclaimedMediaType: MediaType
   
   public let nowPlaying: AssetState?
   
@@ -64,7 +64,7 @@ public struct PlaybackItem: Identifiable, Equatable {
     title: String,
     subtitle: String,
     imageURLs: ImageURLs,
-    proclaimedMediaType: AssetState.Medium
+    proclaimedMediaType: MediaType
   ) {
     self.init(
       id: id,
@@ -83,7 +83,7 @@ public struct PlaybackItem: Identifiable, Equatable {
     title: String,
     subtitle: String,
     imageURLs: ImageURLs,
-    proclaimedMediaType: AssetState.Medium,
+    proclaimedMediaType: MediaType,
     nowPlaying: AssetState?
   ) {
     self.id = id

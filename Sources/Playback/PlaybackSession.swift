@@ -197,12 +197,11 @@ public final class PlaybackSession<Item: Playable>: NSObject {
     return newState
   }
 
-  private static func isVideo(
-    tracks: [AVPlayerItemTrack], type: AssetState.Medium) -> Bool {
-    let containsVideo = tracks.contains {
+  private static
+  func isVideo(tracks: [AVPlayerItemTrack], type: PlaybackItem.MediaType) -> Bool {
+    tracks.contains {
       $0.assetTrack?.mediaType == .video
-    }
-    return containsVideo && type.isVideo
+    } && type.isVideo
   }
 
   // The context for player item key-value observation.
@@ -249,19 +248,19 @@ public final class PlaybackSession<Item: Playable>: NSObject {
     }
   }
 
-  // Although the UIKit documentation states that duration would be available
-  // when status is readyToPlay, the duration property needs to be monitored
-  // separately to aquire a valid value.
-  //
-  // Another concern, for some reason, it is called multiple times, hence the
-  // guard.
-
   private func onDurationChange(_ change: [NSKeyValueChangeKey : Any]?) {
+    // Although the UIKit documentation states that duration would be available
+    // when status is readyToPlay, the duration property needs to be monitored
+    // separately to aquire a valid value.
+    //
+    // Another concern, for some reason, it is called multiple times, hence the
+    // guard.
+    
     guard change?[.newKey] as? CMTime != change?[.oldKey] as? CMTime else {
       return os_log("observed redundant duration change", log: log)
     }
 
-    guard let currentPlaybackItem = currentPlaybackItem, let player = player else {
+    guard let currentPlaybackItem = currentPlaybackItem else {
       return os_log("unexpected duration change: no item or player", log: log, type: .error)
     }
     
@@ -326,21 +325,27 @@ public final class PlaybackSession<Item: Playable>: NSObject {
     ]
 
     for keyPath in keyPaths {
-      playerItem.addObserver(self,
-                       forKeyPath: keyPath,
-                       options: [.old, .new],
-                       context: &playerItemContext)
+      playerItem.addObserver(
+        self,
+        forKeyPath: keyPath,
+        options: [.old, .new],
+        context: &playerItemContext
+      )
     }
-
-    NotificationCenter.default.addObserver(self,
-                   selector: #selector(onItemDidPlayToEndTime),
-                   name: .AVPlayerItemDidPlayToEndTime,
-                   object: playerItem)
-
-    NotificationCenter.default.addObserver(self,
-                   selector: #selector(onItemNewErrorLogEntry),
-                   name: .AVPlayerItemNewErrorLogEntry,
-                   object: playerItem)
+    
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(onItemDidPlayToEndTime),
+      name: .AVPlayerItemDidPlayToEndTime,
+      object: playerItem
+    )
+    
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(onItemNewErrorLogEntry),
+      name: .AVPlayerItemNewErrorLogEntry,
+      object: playerItem
+    )
 
     return playerItem
   }
@@ -410,8 +415,7 @@ public final class PlaybackSession<Item: Playable>: NSObject {
     }
     
     guard assetURL != proxiedURL else {
-      if player?.status == .readyToPlay,
-        !(player?.currentItem?.tracks.isEmpty ?? true) {
+      if player?.status == .readyToPlay, !(player?.currentItem?.tracks.isEmpty ?? true) {
         return seek(item, playing: playing)
       } else {
         return state
