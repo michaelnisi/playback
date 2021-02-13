@@ -21,13 +21,13 @@ public enum PlaybackState<Item: Equatable>: Equatable {
   case inactive(PlaybackError?)
 
   /// The current item has been paused.
-  case paused(Item, PlaybackError?)
+  case paused(Item, AssetState, PlaybackError?)
   
   /// Preparing a new item for playback.
   case preparing(Item, Resuming)
   
-  /// Playing an audible item.
-  case listening(Item)
+  /// Playing an audible item. Associated values are the Item and the momentary  state of the AV asset (at the time of change).
+  case listening(Item, AssetState)
   
   /// Playing a visual item.
   case viewing(Item, AVPlayer)
@@ -38,7 +38,7 @@ public enum PlaybackState<Item: Equatable>: Equatable {
   /// - Parameters:
   ///   - item: The item being paused as a result of an error.
   ///   - error: The error that caused the problem.
-  init(paused item: Item, error: Error) {
+  init(paused item: Item, assetState: AssetState, error: Error) {
     let playbackError: PlaybackError = {
       switch error {
       case let avError as NSError:
@@ -53,7 +53,7 @@ public enum PlaybackState<Item: Equatable>: Equatable {
       }
     }()
     
-    self = .paused(item, playbackError)
+    self = .paused(item, assetState, playbackError)
   }
 }
 
@@ -61,15 +61,15 @@ extension PlaybackState: CustomStringConvertible {
   
   public var description: String {
     switch self {
-    case .inactive(let error):
+    case let .inactive(error):
       return "PlaybackState: inactive: \(String(describing: error))"
-    case .listening(let item):
-      return "PlaybackState: listening: \(item)"
-    case .paused(let item, let error):
-        return "PlaybackState: paused: \(item), \(String(describing: error))"
-    case .preparing(let item, let isResuming):
+    case let .listening(item, assetState):
+      return "PlaybackState: listening: \((item, assetState))"
+    case let .paused(item, assetState, error):
+        return "PlaybackState: paused: \((item, assetState, error))"
+    case let .preparing(item, isResuming):
       return "PlaybackState: preparing: \(item), \(isResuming)"
-    case .viewing(let item, let player):
+    case let .viewing(item, player):
       return "PlaybackState: viewing: \(item), \(player)"
     }
   }
@@ -79,7 +79,7 @@ extension PlaybackState {
   
   var isOK: Bool {
     switch self {
-    case .paused(_, let error):
+    case .paused(_, _, let error):
       return error == nil
     case .preparing, .listening, .viewing:
       return true
@@ -102,9 +102,9 @@ extension PlaybackState {
   var item: Item? {
     switch self {
     case .preparing(let item, _),
-         .listening(let item),
+         .listening(let item, _),
          .viewing(let item, _),
-         .paused(let item, _):
+         .paused(let item, _, _):
       return item
     case .inactive:
       return nil
