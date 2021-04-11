@@ -21,7 +21,7 @@ public enum PlaybackState<Item: Equatable>: Equatable {
   case inactive(PlaybackError?)
 
   /// The current item has been paused.
-  case paused(Item, AssetState, PlaybackError?)
+  case paused(Item, AssetState?, PlaybackError?)
   
   /// Preparing a new item for playback.
   case preparing(Item, Resuming)
@@ -38,7 +38,7 @@ public enum PlaybackState<Item: Equatable>: Equatable {
   /// - Parameters:
   ///   - item: The item being paused as a result of an error.
   ///   - error: The error that caused the problem.
-  init(paused item: Item, assetState: AssetState, error: Error) {
+  init(paused item: Item, assetState: AssetState?, error: Error) {
     let playbackError: PlaybackError = {
       switch error {
       case let avError as NSError:

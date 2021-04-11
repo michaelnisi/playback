@@ -145,8 +145,8 @@ public final class PlaybackSession<Item: Playable>: NSObject {
     return st
   }
     
-  private var assetState: AssetState {
-    currentPlaybackItem!.nowPlaying!
+  private var assetState: AssetState? {
+    currentPlaybackItem?.nowPlaying
   }
   
   /// Sets the playback time to previous for `item`.
@@ -168,7 +168,7 @@ public final class PlaybackSession<Item: Playable>: NSObject {
     
       return PlaybackSession.isVideo(tracks: tracks, type: playbackItem.proclaimedMediaType)
         ? .viewing(item, player)
-        : .listening(item, assetState)
+        : .listening(item, assetState!)
     }()
     
     guard let time = startTime(
@@ -410,12 +410,16 @@ public final class PlaybackSession<Item: Playable>: NSObject {
   /// Returns: `.paused`, `.preparing`, `listening` or `viewing`
   private func prepare(_ item: Item, playing: Bool = true) -> PlaybackState<Item> {
     guard let url = URL(string: item.makePlaybackItem().url) else {
-      fatalError("unhandled error: invalid enclosure: \(item)")
+      os_log(.info, log: log, "invalid enclosure: %{public}@", String(describing: item))
+      pausePlayer()
+      
+      return .paused(item, nil, .failed)
     }
     
     guard let proxiedURL = makeURL?(url) else {
-      os_log("could not prepare: unreachable: %@", log: log, url.absoluteString)
+      os_log(.info, log: log, "could not prepare: unreachable: %@", url.absoluteString)
       pausePlayer()
+      
       return .paused(item, assetState, .unreachable)
     }
     
@@ -745,7 +749,7 @@ public final class PlaybackSession<Item: Playable>: NSObject {
         return self.state = state
         
       case .playing:
-        return self.state = .listening(playingItem, self.assetState)
+        return self.state = .listening(playingItem, self.assetState!)
 
       case .ready, .resume:
         return
