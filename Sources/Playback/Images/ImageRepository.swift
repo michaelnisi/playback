@@ -10,6 +10,7 @@ import Foundation
 import Nuke
 import os.log
 import UIKit
+import Combine
 
 /// Provides processed images as fast as possible.
 public final class ImageRepository {
@@ -433,23 +434,26 @@ extension ImageRepository: Images {
 
 // MARK: - Loading without UIView
 
+public enum ImageError: Error {
+  case unspecified
+}
+
 extension ImageRepository {
   
-  public func loadImage(
-    representing item: Imaginable,
-    at size: CGSize,
-    completed: ((UIImage?) -> Void)?) {
-    guard let request = makeRequests(items: [item], size: size, quality: .medium).first else {
-      return
-    }
-    
-    Nuke.ImagePipeline.shared.loadImage(with: request, completion: { result in
-      if case .success(let data) = result {
-        completed?(data.image)
-      } else {
-        completed?(nil)
+  public func loadImage(representing item: Imaginable, at size: CGSize) -> Future<UIImage, Error> {
+    Future { promise in
+      guard let request = self.makeRequests(items: [item], size: size, quality: .medium).first else {
+        return promise(.failure(ImageError.unspecified))
       }
-    })
+      
+      Nuke.ImagePipeline.shared.loadImage(with: request, completion: { result in
+        if case .success(let data) = result {
+          promise(.success(data.image))
+        } else {
+          promise(.failure(ImageError.unspecified))
+        }
+      })
+    }
   }
 }
 

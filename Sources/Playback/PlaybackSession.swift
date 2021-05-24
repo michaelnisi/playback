@@ -472,7 +472,7 @@ public final class PlaybackSession<Item: Playable>: NSObject {
     times.set(t, for: url)
   }
 
-  private var state = PlaybackState<Item>.inactive(nil) {
+  @Published public private(set) var state = PlaybackState<Item>.inactive(nil) {
     didSet {
       os_log("new state: %{public}@, old state: %{public}@",
              log: log, type: .info,
