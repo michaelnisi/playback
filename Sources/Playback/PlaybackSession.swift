@@ -28,9 +28,6 @@ public final class PlaybackSession<Item: Playable>: NSObject {
   /// implying that the returned URL must be reachable on the current network, otherwise return `nil`.
   public var makeURL: ((URL) -> URL?)?
   
-  /// Called when this session’s playback `state` changed.
-  public var onChange: ((PlaybackSession<Item>, PlaybackState<Item>) -> Void)?
-  
   /// Should return the next item.
   public var nextItem: (() -> Item?)?
   
@@ -495,8 +492,6 @@ public final class PlaybackSession<Item: Playable>: NSObject {
       guard needsUpdate else {
         return
       }
-      
-      onChange?(self, state)
 
       switch state {
       case .paused, .preparing:
