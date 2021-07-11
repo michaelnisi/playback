@@ -1,3 +1,7 @@
+## 12.0.0 (planned)
+
+Publish state using Combine. 
+
 ## 11.0.0 (2021-01-03)
 
 Free from FeedKit dependency.
