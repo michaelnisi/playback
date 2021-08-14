@@ -11,7 +11,7 @@ import AVKit
 import Foundation
 import os.log
 
-let log = OSLog(subsystem: "ink.codes.playback", category: "av")
+let log = OSLog.disabled // (subsystem: "ink.codes.playback", category: "av")
 
 struct RemoteCommandTargets {
   let pause: Any?

@@ -16,7 +16,7 @@ Audiovisual playback is asynchronous, a combination of IO and user events. Inter
 
 ## Install
 
-📦 Add `https://github.com/michaelnisi/playback`  to your package manifest.
+📦 Add `https://github.com/michaelnisi/playback` to your package manifest.
 
 ## License
 

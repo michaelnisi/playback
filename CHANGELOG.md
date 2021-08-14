@@ -1,4 +1,4 @@
-## 12.0.0 (planned)
+## 12.0.0 (2021-08-14)
 
 Publish state using Combine. 
 
