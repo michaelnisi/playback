@@ -537,7 +537,7 @@ public final class PlaybackSession<Item: Playable>: NSObject {
         return state = prepare(newItem, playing: playing)
 
       case .resume:
-        os_log("** resume before change event while inactive", log: log)
+        os_log("resume before change event while inactive", log: log)
         return state = .inactive(fault)
 
       case .error, .end, .paused, .playing, .ready, .video,
@@ -642,7 +642,7 @@ public final class PlaybackSession<Item: Playable>: NSObject {
 
       case .ready:
         guard !(player?.currentItem?.tracks.isEmpty ?? true) else {
-          os_log("** waiting for tracks", log: log)
+          os_log("waiting for tracks", log: log)
           return state = .preparing(preparingItem, preparingShouldPlay)
         }
         
