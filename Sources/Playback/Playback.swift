@@ -10,7 +10,7 @@ import AVFoundation
 import Foundation
 
 /// State of a media asset.
-public struct AssetState {
+public struct AssetState: Equatable {
 
   public let url: URL
   public let rate: Float

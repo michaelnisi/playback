@@ -9,6 +9,7 @@
 import Foundation
 import Nuke
 import UIKit
+import Combine
 
 /// Represents an image request.
 public typealias ImageRequest = Nuke.ImageRequest
@@ -118,7 +119,7 @@ public protocol Images {
   /// Keeps track of successfully loaded images producing no duplicates.
   func preloadImages(representing items: [Imaginable], at size: CGSize)
   
-  func loadImage(representing item: Imaginable, at size: CGSize, completed: ((UIImage?) -> Void)?)
+  func loadImage(representing item: Imaginable, at size: CGSize) -> Future<UIImage, Error>
 
   /// Prefetches images of `items`, preheating the image cache.
   ///

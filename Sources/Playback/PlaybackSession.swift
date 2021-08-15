@@ -11,7 +11,7 @@ import AVKit
 import Foundation
 import os.log
 
-let log = OSLog(subsystem: "ink.codes.playback", category: "av")
+let log = OSLog.disabled // (subsystem: "ink.codes.playback", category: "av")
 
 struct RemoteCommandTargets {
   let pause: Any?
@@ -27,9 +27,6 @@ public final class PlaybackSession<Item: Playable>: NSObject {
   /// This closure should return a local or remote URL for `url`. One might return `nil` to signal that the URL is not reachable,
   /// implying that the returned URL must be reachable on the current network, otherwise return `nil`.
   public var makeURL: ((URL) -> URL?)?
-  
-  /// Called when this session’s playback `state` changed.
-  public var onChange: ((PlaybackSession<Item>, PlaybackState<Item>) -> Void)?
   
   /// Should return the next item.
   public var nextItem: (() -> Item?)?
@@ -144,11 +141,15 @@ public final class PlaybackSession<Item: Playable>: NSObject {
 
     return st
   }
-
+    
+  private var assetState: AssetState? {
+    currentPlaybackItem?.nowPlaying
+  }
+  
   /// Sets the playback time to previous for `item`.
   public func seek(
     _ item: Item, playing: Bool, position: TimeInterval? = nil
-  ) -> PlaybackState<Item> {
+  ) -> PlaybackState<Item>? {
     guard
       let player = self.player,
       let tracks = player.currentItem?.tracks, !tracks.isEmpty else {
@@ -159,12 +160,12 @@ public final class PlaybackSession<Item: Playable>: NSObject {
 
     let newState: PlaybackState<Item> = {
       guard playing else {
-        return .paused(item, nil)
+        return .paused(item, assetState, nil)
       }
     
       return PlaybackSession.isVideo(tracks: tracks, type: playbackItem.proclaimedMediaType)
         ? .viewing(item, player)
-        : .listening(item)
+        : .listening(item, assetState!)
     }()
     
     guard let time = startTime(
@@ -185,7 +186,8 @@ public final class PlaybackSession<Item: Playable>: NSObject {
       }
 
       DispatchQueue.main.async {
-        if playing { player.play() }
+        playing ? player.play() : player.pause()
+        
         guard let currentPlaybackItem = self?.currentPlaybackItem else {
           return
         }
@@ -194,7 +196,7 @@ public final class PlaybackSession<Item: Playable>: NSObject {
       }
     }
     
-    return newState
+    return nil
   }
 
   private static
@@ -405,18 +407,22 @@ public final class PlaybackSession<Item: Playable>: NSObject {
   /// Returns: `.paused`, `.preparing`, `listening` or `viewing`
   private func prepare(_ item: Item, playing: Bool = true) -> PlaybackState<Item> {
     guard let url = URL(string: item.makePlaybackItem().url) else {
-      fatalError("unhandled error: invalid enclosure: \(item)")
+      os_log(.info, log: log, "invalid enclosure: %{public}@", String(describing: item))
+      pausePlayer()
+      
+      return .paused(item, nil, .failed)
     }
     
     guard let proxiedURL = makeURL?(url) else {
-      os_log("could not prepare: unreachable: %@", log: log, url.absoluteString)
+      os_log(.info, log: log, "could not prepare: unreachable: %@", url.absoluteString)
       pausePlayer()
-      return .paused(item, .unreachable)
+      
+      return .paused(item, assetState, .unreachable)
     }
     
     guard assetURL != proxiedURL else {
       if player?.status == .readyToPlay, !(player?.currentItem?.tracks.isEmpty ?? true) {
-        return seek(item, playing: playing)
+        return seek(item, playing: playing) ?? state
       } else {
         return state
       }
@@ -463,7 +469,7 @@ public final class PlaybackSession<Item: Playable>: NSObject {
     times.set(t, for: url)
   }
 
-  private var state = PlaybackState<Item>.inactive(nil) {
+  @Published public private(set) var state = PlaybackState<Item>.inactive(nil) {
     didSet {
       os_log("new state: %{public}@, old state: %{public}@",
              log: log, type: .info,
@@ -476,7 +482,7 @@ public final class PlaybackSession<Item: Playable>: NSObject {
         }
 
         switch state {
-        case .paused(_, let error), .inactive(let error):
+        case .paused(_, assetState, let error), .inactive(let error):
           return error != nil
         default:
           return false
@@ -486,8 +492,6 @@ public final class PlaybackSession<Item: Playable>: NSObject {
       guard needsUpdate else {
         return
       }
-      
-      onChange?(self, state)
 
       switch state {
       case .paused, .preparing:
@@ -533,7 +537,7 @@ public final class PlaybackSession<Item: Playable>: NSObject {
         return state = prepare(newItem, playing: playing)
 
       case .resume:
-        os_log("** resume before change event while inactive", log: log)
+        os_log("resume before change event while inactive", log: log)
         return state = .inactive(fault)
 
       case .error, .end, .paused, .playing, .ready, .video,
@@ -547,7 +551,7 @@ public final class PlaybackSession<Item: Playable>: NSObject {
         fatalError(String(describing: e))
       }
 
-    case .paused(let pausedItem, let pausedError):
+    case let .paused(pausedItem, assetState, pausedError):
       // MARK: paused
       switch e {
       case .change(let item, let playing):
@@ -574,13 +578,20 @@ public final class PlaybackSession<Item: Playable>: NSObject {
         if PlaybackSession.isVideo(tracks: tracks, type: pausedItem.makePlaybackItem().proclaimedMediaType) {
           return state = .viewing(pausedItem, player)
         } else {
-          return state = .listening(pausedItem)
+          return state = .listening(pausedItem, currentPlaybackItem!.nowPlaying!)
         }
 
       case .ready:
-        return state = seek(pausedItem, playing: false)
+        guard let state = seek(pausedItem, playing: false) else {
+          return
+        }
+        
+        return self.state = state
+        
+      case .paused:
+        return self.state = .paused(pausedItem, self.assetState, pausedError)
 
-      case .paused, .video, .pause:
+      case .video, .pause:
         return
 
       case .error(let er):
@@ -588,10 +599,14 @@ public final class PlaybackSession<Item: Playable>: NSObject {
         let itemError = self.player?.currentItem?.error ?? er
         os_log("error while paused: %{public}@", log: log, type: .error,
                itemError as CVarArg)
-        return state = PlaybackState(paused: pausedItem, error: itemError)
+        return state = PlaybackState(paused: pausedItem, assetState: assetState, error: itemError)
 
       case .scrub(let position):
-        return state = seek(pausedItem, playing: false, position: position)
+        guard let state = seek(pausedItem, playing: false, position: position) else {
+          return
+        }
+        
+        return self.state = state
 
       case .end:
         os_log("""
@@ -611,7 +626,7 @@ public final class PlaybackSession<Item: Playable>: NSObject {
         let itemError = self.player?.currentItem?.error ?? er
         os_log("error while preparing: %{public}@", log: log, type: .error,
                itemError as CVarArg)
-        return state = PlaybackState(paused: preparingItem, error: itemError)
+        return state = PlaybackState(paused: preparingItem, assetState: assetState, error: itemError)
 
       case .resume:
         return state = .preparing(preparingItem, true)
@@ -623,14 +638,19 @@ public final class PlaybackSession<Item: Playable>: NSObject {
         return state = .preparing(preparingItem, !preparingShouldPlay)
 
       case .paused:
-        return state = .paused(preparingItem, nil)
+        return state = .paused(preparingItem, assetState, nil)
 
       case .ready:
         guard !(player?.currentItem?.tracks.isEmpty ?? true) else {
-          os_log("** waiting for tracks", log: log)
+          os_log("waiting for tracks", log: log)
           return state = .preparing(preparingItem, preparingShouldPlay)
         }
-        return state = seek(preparingItem, playing: preparingShouldPlay)
+        
+        guard let state = seek(preparingItem, playing: preparingShouldPlay) else {
+          return
+        }
+        
+        return self.state = state
 
       case .change(let item, let playing):
         guard item != preparingItem else {
@@ -655,7 +675,7 @@ public final class PlaybackSession<Item: Playable>: NSObject {
         if isVideo {
           return state = .viewing(preparingItem, player)
         } else {
-          return state = .listening(preparingItem)
+          return state = .listening(preparingItem, currentPlaybackItem!.nowPlaying!)
         }
 
       case .video, .scrub:
@@ -677,7 +697,7 @@ public final class PlaybackSession<Item: Playable>: NSObject {
         fatalError(String(describing: e))
       }
 
-    case .listening(let playingItem), .viewing(let playingItem, _):
+    case .listening(let playingItem, _), .viewing(let playingItem, _):
       // MARK: listening/viewing
       switch e {
       case .error(let er):
@@ -688,14 +708,14 @@ public final class PlaybackSession<Item: Playable>: NSObject {
         os_log("error while listening or viewing: %{public}@",
                log: log, type: .error, itemError as CVarArg)
         
-        return state = PlaybackState(paused: playingItem, error: itemError)
+        return state = PlaybackState(paused: playingItem, assetState: assetState, error: itemError)
 
       case .paused:
         assert(player?.error == nil)
         assert(player?.currentItem?.error == nil)
         setCurrentTime()
         
-        return state = .paused(playingItem, nil)
+        return state = .paused(playingItem, assetState, nil)
       
       case .end:
         return pausePlayer()
@@ -717,9 +737,16 @@ public final class PlaybackSession<Item: Playable>: NSObject {
         return pausePlayer()
 
       case .scrub(let position):
-        return state = seek(playingItem, playing: true, position: position)
+        guard let state = seek(playingItem, playing: true, position: position) else {
+          return
+        }
+        
+        return self.state = state
+        
+      case .playing:
+        return self.state = .listening(playingItem, self.assetState!)
 
-      case .ready, .playing, .resume:
+      case .ready, .resume:
         return
 
       case .video:
@@ -780,7 +807,7 @@ extension PlaybackSession {
   
   public func isPlaying(guid: PlaybackItem.ID) -> Bool {
     switch state {
-    case .listening(let item),
+    case .listening(let item, _),
          .viewing(let item, _):
       return item.makePlaybackItem().id == guid
     case .inactive, .paused, .preparing:
