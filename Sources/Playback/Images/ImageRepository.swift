@@ -153,7 +153,7 @@ extension ImageRepository {
   private func makePlaceholder(
     item: Imaginable, size: CGSize, isClean: Bool
   ) -> (URL?, ImageContainer?) {
-    let urls = item.makeURLs()
+    let urls = item.makeImageURLs()
     let urlStrings = [urls.small, urls.medium, urls.large]
 
     // Finding the first cached response.
@@ -183,7 +183,7 @@ extension ImageRepository {
     let l =  1 / 4 / UIScreen.main.scale
     let s = size.applying(CGAffineTransform(scaleX: l, y: l))
 
-    return (imageURL(representing: item.makeURLs(), at: s), nil)
+    return (imageURL(representing: item.makeImageURLs(), at: s), nil)
   }
 }
 
@@ -317,7 +317,7 @@ extension ImageRepository: Images {
     dispatchPrecondition(condition: .onQueue(.main))
     
     let originalSize = imageView.bounds.size
-    let urls = item.makeURLs()
+    let urls = item.makeImageURLs()
 
     os_log("getting: ( %{public}@, %{public}@ )",
            log: log, type: .info, urls.title, originalSize as CVarArg)
@@ -325,7 +325,7 @@ extension ImageRepository: Images {
     let relativeSize = ImageRepository.makeSize(
       size: originalSize, quality: options.quality)
 
-    guard let itemURL = imageURL(representing: item.makeURLs(), at: relativeSize) else {
+    guard let itemURL = imageURL(representing: item.makeImageURLs(), at: relativeSize) else {
       os_log("missing URL: %{public}@",
              log: log, type: .error, String(describing: item))
       return
@@ -392,7 +392,7 @@ extension ImageRepository: Images {
     os_log("placeholding", log: log, type: .info)
 
     if let image = placeholder?.image {
-      let urls = item.makeURLs()
+      let urls = item.makeImageURLs()
       let p = placeholderURL?.lastPathComponent ?? "weirdly got no URL"
       
       os_log("cache hit: ( %{public}@, %{public}@ )", log: log, type: .info, urls.title, p)
@@ -467,7 +467,7 @@ extension ImageRepository {
     return items.compactMap {
       let relativeSize = ImageRepository.makeSize(size: size, quality: quality)
 
-      guard let url = imageURL(representing: $0.makeURLs(), at: relativeSize) else {
+      guard let url = imageURL(representing: $0.makeImageURLs(), at: relativeSize) else {
         return nil
       }
 
@@ -510,7 +510,7 @@ extension ImageRepository {
 extension ImageRepository {
   
   public func preloadImages(representing items: [Imaginable], at size: CGSize) {
-    let urls = items.map { $0.makeURLs() }
+    let urls = items.map { $0.makeImageURLs() }
     let ids = Set(urls.compactMap { $0.id })
     let diff = ids.subtracting(preloadedImages)
     

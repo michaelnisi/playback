@@ -81,7 +81,7 @@ public struct FKImageLoadingOptions {
 
 /// Types representing image loadable content must implement the `Imaginable` protocol to use `Images` for loading.
 public protocol Imaginable {
-  func makeURLs() -> ImageURLs
+  func makeImageURLs() -> ImageURLs
 }
 
 /// An image loading API.
