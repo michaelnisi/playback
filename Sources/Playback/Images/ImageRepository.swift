@@ -76,7 +76,7 @@ public final class ImageRepository {
 
   public static var shared: Images = ImageRepository()
 
-  fileprivate let preheater = Nuke.ImagePreheater()
+  fileprivate let preheater = Nuke.ImagePrefetcher()
 
   /// A thread-safe temporary cache for URL objects. Those aren’t cheap.
   private var urls = NSCache<NSString, NSURL>()
@@ -484,14 +484,14 @@ extension ImageRepository {
 
     let reqs = makeRequests(items: items, size: size, quality: quality)
     
-    preheater.startPreheating(with: reqs)
+    preheater.startPrefetching(with: reqs)
 
     return reqs
   }
 
   public func cancel(prefetching requests: [ImageRequest]) {
     os_log("cancelling prefetching", log: log, type: .info)
-    preheater.stopPreheating(with: requests)
+    preheater.stopPrefetching(with: requests)
   }
 
   public func cancelPrefetching(
@@ -501,7 +501,7 @@ extension ImageRepository {
 
     let reqs = makeRequests(items: items, size: size, quality: quality)
 
-    preheater.stopPreheating(with: reqs)
+    preheater.stopPrefetching(with: reqs)
   }
 }
 
