@@ -1,10 +1,13 @@
+//===----------------------------------------------------------------------===//
 //
-//  ImageRepository.swift
-//  Playback
+// This source file is part of the Playback open source project
 //
-//  Created by Michael Nisi on 13.12.18.
-//  Copyright © 2018 Michael Nisi. All rights reserved.
+// Copyright (c) 2021 Michael Nisi and collaborators
+// Licensed under MIT License
 //
+// See https://github.com/michaelnisi/playback/blob/main/LICENSE for license information
+//
+//===----------------------------------------------------------------------===//
 
 import Foundation
 import Nuke

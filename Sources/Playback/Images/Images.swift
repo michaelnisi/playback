@@ -1,10 +1,13 @@
+//===----------------------------------------------------------------------===//
 //
-//  Images.swift - Load images
-//  Playback
+// This source file is part of the Playback open source project
 //
-//  Created by Michael on 3/19/17.
-//  Copyright © 2017 Michael Nisi. All rights reserved.
+// Copyright (c) 2021 Michael Nisi and collaborators
+// Licensed under MIT License
 //
+// See https://github.com/michaelnisi/playback/blob/main/LICENSE for license information
+//
+//===----------------------------------------------------------------------===//
 
 import Foundation
 import Nuke

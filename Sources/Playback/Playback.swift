@@ -1,17 +1,19 @@
+//===----------------------------------------------------------------------===//
 //
-//  Playback.swift
-//  Playback
+// This source file is part of the Playback open source project
 //
-//  Created by Michael on 6/14/17.
-//  Copyright © 2017 Michael Nisi. All rights reserved.
+// Copyright (c) 2021 Michael Nisi and collaborators
+// Licensed under MIT License
 //
+// See https://github.com/michaelnisi/playback/blob/main/LICENSE for license information
+//
+//===----------------------------------------------------------------------===//
 
 import AVFoundation
 import Foundation
 
 /// State of a media asset.
 public struct AssetState: Equatable {
-
   public let url: URL
   public let rate: Float
   public let duration: Double
@@ -34,9 +36,14 @@ public struct AssetState: Equatable {
   }
 }
 
+extension AssetState {
+  var paused: AssetState {
+    AssetState(url: url, rate: 0, duration: duration, time: time)
+  }
+}
+
 /// Information about the current playback item.
 public struct PlaybackItem: Identifiable, Equatable {
-  
   public enum MediaType: UInt {
     case none, audio, video
     
@@ -110,7 +117,6 @@ public enum PlaybackError: Error {
 }
 
 extension PlaybackError: Equatable {
-  
   public static func == (lhs: PlaybackError, rhs: PlaybackError) -> Bool {
     switch (lhs, rhs) {
     case (.unknown, .unknown),
@@ -135,7 +141,6 @@ extension PlaybackError: Equatable {
 
 /// Stores playback timestamps.
 public protocol Times {  
-  
   /// Return the matching timestamp for `uid`.
   func time(uid: String) -> CMTime
   

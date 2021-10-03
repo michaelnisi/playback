@@ -1,10 +1,13 @@
+//===----------------------------------------------------------------------===//
 //
-//  RemoteCommandProxying.swift
-//  Playback
+// This source file is part of the Playback open source project
 //
-//  Created by Michael on 5/28/17.
-//  Copyright © 2017 Michael Nisi. All rights reserved.
+// Copyright (c) 2021 Michael Nisi and collaborators
+// Licensed under MIT License
 //
+// See https://github.com/michaelnisi/playback/blob/main/LICENSE for license information
+//
+//===----------------------------------------------------------------------===//
 
 import Foundation
 import MediaPlayer

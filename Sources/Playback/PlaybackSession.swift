@@ -1,17 +1,20 @@
+//===----------------------------------------------------------------------===//
 //
-//  PlaybackSession.swift
-//  Playback
+// This source file is part of the Playback open source project
 //
-//  Created by Michael Nisi on 01.03.18.
-//  Copyright © 2018 Michael Nisi. All rights reserved.
+// Copyright (c) 2021 Michael Nisi and collaborators
+// Licensed under MIT License
 //
+// See https://github.com/michaelnisi/playback/blob/main/LICENSE for license information
+//
+//===----------------------------------------------------------------------===//
 
 import AVFoundation
 import AVKit
 import Foundation
 import os.log
 
-let log = OSLog.disabled // (subsystem: "ink.codes.playback", category: "av")
+let log = OSLog(subsystem: "ink.codes.playback", category: "Playback")
 
 struct RemoteCommandTargets {
   let pause: Any?
@@ -428,7 +431,7 @@ public final class PlaybackSession<Item: Playable>: NSObject {
       }
     }
     
-    player = makeAVPlayer(url: proxiedURL)   
+    player = makeAVPlayer(url: proxiedURL)
     
     return .preparing(item, playing)
   }
@@ -436,7 +439,7 @@ public final class PlaybackSession<Item: Playable>: NSObject {
   // MARK: - FSM
   
   /// Saves the current time position of the player. If the item is considered
-  /// as played, its time is saved as `CMTime.indefinite`.
+  /// as completed, its time is saved as `CMTime.indefinite`.
   private func setCurrentTime() {
     guard let player = self.player,
           let url = currentItem?.makePlaybackItem().url else {
@@ -715,7 +718,7 @@ public final class PlaybackSession<Item: Playable>: NSObject {
         assert(player?.currentItem?.error == nil)
         setCurrentTime()
         
-        return state = .paused(playingItem, assetState, nil)
+        return state = .paused(playingItem, assetState?.paused, nil)
       
       case .end:
         return pausePlayer()
@@ -766,7 +769,6 @@ public final class PlaybackSession<Item: Playable>: NSObject {
       updateState(e)
     }
   }
-
 }
 
 // MARK: - Managing Audio Session and Remote Command Center
@@ -862,17 +864,21 @@ extension PlaybackSession {
   private var incoming: DispatchQueue {
     return DispatchQueue.global(qos: .userInitiated)
   }
-  
+}
+
+// MARK: - Incoming
+
+public extension PlaybackSession {
   @discardableResult
-  public func forward() -> Bool {
-    incoming.async {
-      guard let item = self.nextItem?() else {
+  func forward() -> Bool {
+    incoming.async { [unowned self] in
+      guard let item = nextItem?() else {
         return
       }
 
-      self.event(.change(item, self.state.shouldResume))
+      event(.change(item, state.shouldResume))
       
-      guard self.state.isOK else {
+      guard state.isOK else {
         os_log("forward command failed", log: log, type: .error)
         return
       }
@@ -882,15 +888,15 @@ extension PlaybackSession {
   }
 
   @discardableResult
-  public func backward() -> Bool {
-    incoming.async {
-      guard let item = self.previousItem?() else {
+  func backward() -> Bool {
+    incoming.async { [unowned self] in
+      guard let item = previousItem?() else {
         return
       }
       
-      self.event(.change(item, self.state.shouldResume))
+      event(.change(item, state.shouldResume))
       
-      guard self.state.isOK else {
+      guard state.isOK else {
         os_log("backward command failed", log: log, type: .error)
         return
       }
@@ -900,15 +906,15 @@ extension PlaybackSession {
   }
 
   @discardableResult
-  public func resume(_ item: Item? = nil, from time: Double? = nil) -> Bool {
-    incoming.async {
+  func resume(_ item: Item? = nil, from time: Double? = nil) -> Bool {
+    incoming.async { [unowned self] in
       if let item = item {
-        self.event(.change(item, true))
+        event(.change(item, true))
       } else {
-        self.event(.resume)
+        event(.resume)
       }
 
-      guard self.state.isOK else {
+      guard state.isOK else {
         os_log("resume command failed", log: log, type: .error)
         return
       }
@@ -918,15 +924,15 @@ extension PlaybackSession {
   }
 
   @discardableResult
-  public func pause(_ item: Item? = nil, at time: Double? = nil) -> Bool {
-    incoming.async {
+  func pause(_ item: Item? = nil, at time: Double? = nil) -> Bool {
+    incoming.async { [unowned self] in
       if let item = item {
-        self.event(.change(item, false))
+        event(.change(item, false))
       } else {
-        self.event(.pause)
+        event(.pause)
       }
       
-      guard self.state.isOK else {
+      guard state.isOK else {
         os_log("pause command failed", log: log, type: .error)
         return
       }
@@ -936,11 +942,11 @@ extension PlaybackSession {
   }
 
   @discardableResult
-  public func toggle() -> Bool {
-    incoming.async {
-      self.event(.toggle)
+  func toggle() -> Bool {
+    incoming.async { [unowned self] in
+      event(.toggle)
       
-      guard self.state.isOK else {
+      guard state.isOK else {
         os_log("toggle command failed", log: log, type: .error)
         return
       }
@@ -950,11 +956,11 @@ extension PlaybackSession {
   }
 
   @discardableResult
-  public func scrub(_ position: TimeInterval) -> Bool {
-    incoming.async {
-      self.event(.scrub(position))
+  func scrub(_ position: TimeInterval) -> Bool {
+    incoming.async { [unowned self] in
+      event(.scrub(position))
 
-      guard self.state.isOK else {
+      guard state.isOK else {
         os_log("toggle command failed", log: log, type: .error)
         return
       }
