@@ -145,7 +145,7 @@ public final class PlaybackSession<Item: Playable>: NSObject {
     return st
   }
     
-  private var assetState: AssetState? {
+  public var assetState: AssetState? {
     currentPlaybackItem?.nowPlaying
   }
   
@@ -961,7 +961,7 @@ public extension PlaybackSession {
       event(.scrub(position))
 
       guard state.isOK else {
-        os_log("toggle command failed", log: log, type: .error)
+        os_log("scrub command failed", log: log, type: .error)
         return
       }
     }
