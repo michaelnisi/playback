@@ -954,9 +954,23 @@ public extension PlaybackSession {
 
     return true
   }
+  
+  private func makeNewPosition(diff: TimeInterval) -> TimeInterval {
+    guard let time = assetState?.time, let duration = assetState?.duration else {
+      return 0
+    }
+    
+    guard diff > 0 else {
+      return max(0, time + diff)
+    }
+    
+    return min(time + diff, duration)
+  }
 
   @discardableResult
-  func scrub(_ position: TimeInterval) -> Bool {
+  func scrub(_ diff: TimeInterval) -> Bool {
+    let position = makeNewPosition(diff: diff)
+    
     incoming.async { [unowned self] in
       event(.scrub(position))
 
