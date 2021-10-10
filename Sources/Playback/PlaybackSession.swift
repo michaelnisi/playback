@@ -966,11 +966,9 @@ public extension PlaybackSession {
     
     return min(time + diff, duration)
   }
-
+  
   @discardableResult
-  func scrub(_ diff: TimeInterval) -> Bool {
-    let position = makeNewPosition(diff: diff)
-    
+  func scrub(_ position: TimeInterval) -> Bool {
     incoming.async { [unowned self] in
       event(.scrub(position))
 
@@ -981,5 +979,10 @@ public extension PlaybackSession {
     }
 
     return true
+  }
+
+  @discardableResult
+  func scrub(adding time: TimeInterval) -> Bool {
+    scrub(makeNewPosition(diff: time))
   }
 }
