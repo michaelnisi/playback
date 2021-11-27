@@ -20,7 +20,9 @@ public final class ImageRepository {
 
   private static func removeAllFromCache(named name: String) throws {
     guard let root = FileManager.default.urls(
-      for: .cachesDirectory, in: .userDomainMask).first else {
+      for: .cachesDirectory, in: .userDomainMask
+    )
+    .first else {
       throw NSError(
         domain: NSCocoaErrorDomain,
         code: NSFileNoSuchFileError,
@@ -236,8 +238,7 @@ extension ImageRepository: Images {
       return nil
     }
     
-    os_log("accessing cached: %{public}@",
-           log: log, type: .info, url.lastPathComponent)
+    os_log("accessing cached: %{public}@", log: log, type: .info, url.lastPathComponent)
 
     guard let img = cachedImage(url: url) else {
       os_log("not cached: %{public}@", log: log, String(describing: item))
@@ -245,8 +246,7 @@ extension ImageRepository: Images {
     }
     
     guard ImageRepository.matchingSize(image: img, size: size) else {
-      os_log("resizing: %{public}@", 
-             log: log, type: .info, String(describing: item))
+      os_log("resizing: %{public}@", log: log, type: .info, String(describing: item))
       return ImageProcessors.Resize(size: size, crop: true).process(img)
     }
   
@@ -329,8 +329,7 @@ extension ImageRepository: Images {
       size: originalSize, quality: options.quality)
 
     guard let itemURL = imageURL(representing: item.makeImageURLs(), at: relativeSize) else {
-      os_log("missing URL: %{public}@",
-             log: log, type: .error, String(describing: item))
+      os_log("missing URL: %{public}@", log: log, type: .error, String(describing: item))
       return
     }
 
@@ -363,7 +362,8 @@ extension ImageRepository: Images {
       Nuke.loadImage(with: req, options: opts, into: imageView, completion: { result in
         switch result {
         case .failure(let er):
-          os_log("image loading failed: ( %{public}@, %{public}@ )", log: log, er as CVarArg, String(describing: req))
+          os_log("image loading failed: ( %{public}@, %{public}@ )",
+                 log: log, er as CVarArg, String(describing: req))
 
         case .success:
           break
@@ -499,8 +499,7 @@ extension ImageRepository {
 
   public func cancelPrefetching(
     _ items: [Imaginable], at size: CGSize, quality: ImageQuality) {
-    os_log("cancelling prefetching: %{public}i", 
-           log: log, type: .info, items.count)
+    os_log("cancelling prefetching: %{public}i", log: log, type: .info, items.count)
 
     let reqs = makeRequests(items: items, size: size, quality: quality)
 
